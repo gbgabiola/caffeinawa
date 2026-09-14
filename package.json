@@ -1,12 +1,14 @@
 {
   "name": "caffeinawa",
   "private": true,
+  "packageManager": "pnpm@12.4.1",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "typecheck": "turbo typecheck",
     "lint": "turbo lint",
     "test": "turbo test",
-    "typecheck": "turbo typecheck"
+    "clean": "turbo clean"
   },
   "devDependencies": {
     "turbo": "latest"
