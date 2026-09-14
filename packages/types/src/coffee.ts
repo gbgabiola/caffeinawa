@@ -1,4 +1,4 @@
-export type CoffeeCategory = 'espresso' | 'latte' | 'cappuccino' | 'cold_brew' | 'non_coffee';
+export type CoffeeCategory = 'espresso' | 'latte' | 'cappuccino' | 'americano' | 'cold_brew' | 'non_coffee';
 
 export interface Coffee {
   id: string;
