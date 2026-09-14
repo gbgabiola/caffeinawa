@@ -1,23 +1,22 @@
+import { CoffeeGrid } from '@/components/coffee/CoffeeGrid';
 import { getCoffees } from '@/lib/api/coffees';
 
 export default async function MenuPage() {
   const coffees = await getCoffees();
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-12">
-      <h1 className="text-4xl font-bold">Caffeinawa Coffee Menu</h1>
+    <main className="mx-auto max-w-7xl px-6 py-16">
+      <header className="mb-10">
+        <p className="text-sm font-medium uppercase tracking-wider">Caffeinawa</p>
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {coffees.map(coffee => (
-          <article key={coffee.id} className="rounded-xl border p-6">
-            <h2 className="text-xl font-semibold">{coffee.name}</h2>
+        <h1 className="mt-2 text-4xl font-bold">Our Coffee</h1>
 
-            <p className="mt-2 text-gray-600">{coffee.description}</p>
+        <p className="mt-3 max-w-2xl text-gray-600">
+          Discover handcrafted coffee made for every kind of coffee moment.
+        </p>
+      </header>
 
-            <p className="mt-4 font-bold">₱{coffee.price}</p>
-          </article>
-        ))}
-      </div>
+      <CoffeeGrid coffees={coffees} />
     </main>
   );
 }
