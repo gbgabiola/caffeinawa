@@ -1,0 +1,43 @@
+model Coffee {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  price       Decimal
+  available   Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems  OrderItem[]
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  status     OrderStatus
+  total      Decimal
+
+  createdAt  DateTime    @default(now())
+
+  items      OrderItem[]
+}
+
+model OrderItem {
+  id        String @id @default(uuid())
+  quantity  Int
+  unitPrice Decimal
+
+  orderId   String
+  coffeeId  String
+
+  order     Order  @relation(fields: [orderId], references: [id])
+  coffee    Coffee @relation(fields: [coffeeId], references: [id])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
