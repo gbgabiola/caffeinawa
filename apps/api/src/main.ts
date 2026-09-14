@@ -11,7 +11,11 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(process.env.PORT ?? 3001);
+  const port = Number(process.env.PORT ?? 3001);
+
+  await app.listen(port);
+
+  console.log(`Caffeinawa API running on http://localhost:${port}`);
 }
 
 bootstrap();

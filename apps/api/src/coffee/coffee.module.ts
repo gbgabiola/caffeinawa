@@ -4,6 +4,7 @@ import { CoffeeService } from './coffee.service.js';
 
 @Module({
   controllers: [CoffeeController],
-  providers: [CoffeeService]
+  providers: [CoffeeService],
+  exports: [CoffeeService],
 })
 export class CoffeeModule {}

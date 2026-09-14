@@ -1,5 +1,16 @@
-import { Controller, Get } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+
 import { CoffeeService } from './coffee.service.js';
+import type { CreateCoffeeDto } from './dto/create-coffee.dto.js';
+import type { UpdateCoffeeDto } from './dto/update-coffee.dto.js';
 
 @Controller('coffees')
 export class CoffeeController {
@@ -8,5 +19,25 @@ export class CoffeeController {
   @Get()
   findAll() {
     return this.coffeeService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.coffeeService.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateCoffeeDto) {
+    return this.coffeeService.create(dto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateCoffeeDto) {
+    return this.coffeeService.update(id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    this.coffeeService.remove(id);
   }
 }
