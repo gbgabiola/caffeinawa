@@ -236,6 +236,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@caffeinawa/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -270,6 +273,8 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+
+  packages/types: {}
 
 packages:
 
