@@ -9,8 +9,8 @@ import {
 } from '@nestjs/common';
 
 import { CoffeeService } from './coffee.service.js';
-import type { CreateCoffeeDto } from './dto/create-coffee.dto.js';
-import type { UpdateCoffeeDto } from './dto/update-coffee.dto.js';
+import { CreateCoffeeDto } from './dto/create-coffee.dto.js';
+import { UpdateCoffeeDto } from './dto/update-coffee.dto.js';
 
 @Controller('coffees')
 export class CoffeeController {
