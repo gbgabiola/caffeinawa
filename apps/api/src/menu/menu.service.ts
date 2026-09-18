@@ -9,28 +9,25 @@ import type { MenuQueryDto } from './dto/menu-query.dto.js';
 export class MenuService {
   constructor(private readonly coffeeService: CoffeeService) {}
 
-  findAll(query: MenuQueryDto): Coffee[] {
-    const coffees = this.coffeeService.findAll();
+  findAll(query: MenuQueryDto): MenuItemEntity[] {
+    let coffees = this.coffeeService.findAll();
 
-    return coffees
-      .filter((coffee) => {
-        if (query.category && coffee.category !== query.category) {
-          return false;
-        }
+    if (query.category !== undefined) {
+      coffees = coffees.filter((coffee) => coffee.category === query.category);
+    }
 
-        if (
-          query.available !== undefined &&
-          coffee.available !== query.available
-        ) {
-          return false;
-        }
+    if (query.available !== undefined) {
+      coffees = coffees.filter(
+        (coffee) => coffee.available === query.available,
+      );
+    }
 
-        return true;
-      })
-      .map((coffee) => new MenuItemEntity(coffee));
+    return coffees.map((coffee) => new MenuItemEntity(coffee));
   }
 
-  findOne(id: string): Coffee {
-    return new MenuItemEntity(this.coffeeService.findOne(id));
+  findOne(id: string): MenuItemEntity {
+    const coffee = this.coffeeService.findOne(id);
+
+    return new MenuItemEntity(coffee);
   }
 }

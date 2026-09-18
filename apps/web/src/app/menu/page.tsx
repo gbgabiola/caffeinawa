@@ -1,8 +1,8 @@
 import { CoffeeGrid } from '@/components/coffee/CoffeeGrid';
-import { getCoffees } from '@/lib/api/coffees';
+import { getMenu } from '@/lib/api/menu';
 
 export default async function MenuPage() {
-  const coffees = await getCoffees();
+  const coffees = await getMenu();
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-16">

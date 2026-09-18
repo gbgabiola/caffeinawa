@@ -9,7 +9,13 @@ export class MenuItemEntity implements Coffee {
   available: boolean;
   imageUrl?: string;
 
-  constructor(data: Coffee) {
-    Object.assign(this, data);
+  constructor(coffee: Coffee) {
+    this.id = coffee.id;
+    this.name = coffee.name;
+    this.description = coffee.description;
+    this.category = coffee.category;
+    this.price = coffee.price;
+    this.available = coffee.available;
+    this.imageUrl = coffee.imageUrl;
   }
 }
