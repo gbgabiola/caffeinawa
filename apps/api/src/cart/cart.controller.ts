@@ -6,13 +6,17 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { CustomerOwnerGuard } from '../auth/guards/customer-owner.guard.js';
 import { CartService } from './cart.service.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 
 @Controller('customers/:customerId/cart')
+@UseGuards(JwtAuthGuard, CustomerOwnerGuard)
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
@@ -51,7 +55,6 @@ export class CartController {
     return this.cartService.clear(customerId);
   }
 
-  // Checkout
   @Post('checkout')
   checkout(@Param('customerId') customerId: string) {
     return this.cartService.checkout(customerId);

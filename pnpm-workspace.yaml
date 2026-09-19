@@ -3,6 +3,7 @@ packages:
   - 'packages/*'
 allowBuilds:
   '@prisma/engines': false
+  argon2: true
   esbuild: true
   msgpackr-extract: true
   prisma: true

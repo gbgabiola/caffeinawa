@@ -25,6 +25,7 @@ model Customer {
   id      String  @id @default(uuid())
   name    String
   email   String  @unique
+  passwordHash String?
 
   cart    Cart?
   orders  Order[]

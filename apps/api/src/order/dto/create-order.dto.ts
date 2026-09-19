@@ -2,7 +2,6 @@ import {
   ArrayMinSize,
   IsInt,
   IsNotEmpty,
-  IsString,
   IsUUID,
   Min,
   ValidateNested,
@@ -19,10 +18,6 @@ export class CreateOrderItemDto {
 }
 
 export class CreateOrderDto {
-  @IsUUID()
-  customerId!: string;
-
-  @IsNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   @ArrayMinSize(1)

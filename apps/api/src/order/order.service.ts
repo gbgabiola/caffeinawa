@@ -40,8 +40,11 @@ export class OrderService {
     });
   }
 
-  async findAll(): Promise<Order[]> {
+  async findAll(customerId: string): Promise<Order[]> {
     const orders = await this.prisma.order.findMany({
+      where: {
+        customerId,
+      },
       include: {
         items: true,
       },
@@ -53,9 +56,9 @@ export class OrderService {
     return orders.map((order) => this.toEntity(order));
   }
 
-  async findOne(id: string): Promise<Order> {
+  async findOne(id: string, customerId: string): Promise<Order> {
     const order = await this.prisma.order.findUnique({
-      where: { id },
+      where: { id, customerId },
       include: {
         items: true,
       },
@@ -68,15 +71,15 @@ export class OrderService {
     return this.toEntity(order);
   }
 
-  async create(dto: CreateOrderDto): Promise<Order> {
+  async create(customerId: string, dto: CreateOrderDto): Promise<Order> {
     const customer = await this.prisma.customer.findUnique({
       where: {
-        id: dto.customerId,
+        id: customerId,
       },
     });
 
     if (!customer) {
-      throw new NotFoundException(`Customer "${dto.customerId}" not found`);
+      throw new NotFoundException(`Customer "${customerId}" not found`);
     }
 
     const coffeeIds = dto.items.map(
@@ -122,7 +125,7 @@ export class OrderService {
 
     const order = await this.prisma.order.create({
       data: {
-        customerId: dto.customerId,
+        customerId: customerId,
         status: PrismaOrderStatus.PENDING,
         total: new Prisma.Decimal(total),
         items: {
@@ -137,8 +140,12 @@ export class OrderService {
     return this.toEntity(order);
   }
 
-  async update(id: string, dto: UpdateOrderDto): Promise<Order> {
-    await this.findOne(id);
+  async update(
+    id: string,
+    customerId: string,
+    dto: UpdateOrderDto,
+  ): Promise<Order> {
+    await this.findOne(id, customerId);
 
     const order = await this.prisma.order.update({
       where: { id },
@@ -153,8 +160,8 @@ export class OrderService {
     return this.toEntity(order);
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, customerId: string): Promise<void> {
+    await this.findOne(id, customerId);
 
     await this.prisma.order.delete({
       where: { id },
