@@ -22,10 +22,11 @@ model Coffee {
 }
 
 model Customer {
-  id      String  @id @default(uuid())
+  id      String        @id @default(uuid())
   name    String
-  email   String  @unique
+  email   String        @unique
   passwordHash String?
+  role    CustomerRole  @default(CUSTOMER)
 
   cart    Cart?
   orders  Order[]
@@ -91,4 +92,9 @@ enum OrderStatus {
   READY
   COMPLETED
   CANCELLED
+}
+
+enum CustomerRole {
+  CUSTOMER
+  ADMIN
 }
