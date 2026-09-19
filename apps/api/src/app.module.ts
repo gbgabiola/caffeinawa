@@ -4,8 +4,15 @@ import { CoffeeModule } from './coffee/coffee.module.js';
 import { CustomerModule } from './customer/customer.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { MenuModule } from './menu/menu.module.js';
+import { OrderModule } from './order/order.module.js';
 
 @Module({
-  imports: [DatabaseModule, CoffeeModule, MenuModule, CustomerModule],
+  imports: [
+    DatabaseModule,
+    CoffeeModule,
+    MenuModule,
+    CustomerModule,
+    OrderModule,
+  ],
 })
 export class AppModule {}
