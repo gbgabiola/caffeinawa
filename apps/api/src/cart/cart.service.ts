@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { Cart, CartItem } from '@caffeinawa/types';
+import type { Cart, CartItem, Order, OrderStatus } from '@caffeinawa/types';
 
 import { PrismaService } from '../database/prisma.service.js';
 import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
@@ -180,5 +180,85 @@ export class CartService {
     });
 
     return this.findOne(customerId);
+  }
+
+  // Checkout
+  async checkout(customerId: string): Promise<Order> {
+    return this.prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({
+        where: { id: customerId },
+      });
+
+      if (!customer) {
+        throw new NotFoundException(`Customer "${customerId}" not found`);
+      }
+
+      const cart = await tx.cart.findUnique({
+        where: { customerId },
+        include: {
+          items: {
+            include: {
+              coffee: true,
+            },
+          },
+        },
+      });
+
+      if (!cart || cart.items.length === 0) {
+        throw new BadRequestException('Cart is empty');
+      }
+
+      for (const item of cart.items) {
+        if (!item.coffee.available) {
+          throw new BadRequestException(
+            `Coffee "${item.coffee.name}" is no longer available`,
+          );
+        }
+      }
+
+      const orderItems = cart.items.map((item) => ({
+        coffeeId: item.coffeeId,
+        quantity: item.quantity,
+        unitPrice: item.coffee.price,
+      }));
+
+      const total = orderItems.reduce(
+        (sum, item) => sum.add(item.unitPrice.mul(item.quantity)),
+        new Prisma.Decimal(0),
+      );
+
+      const order = await tx.order.create({
+        data: {
+          customerId,
+          total,
+          items: {
+            create: orderItems,
+          },
+        },
+        include: {
+          items: true,
+        },
+      });
+
+      await tx.cartItem.deleteMany({
+        where: {
+          cartId: cart.id,
+        },
+      });
+
+      return {
+        id: order.id,
+        customerId: order.customerId,
+        status: order.status.toLowerCase() as OrderStatus,
+        total: order.total.toNumber(),
+        createdAt: order.createdAt.toISOString(),
+        items: order.items.map((item) => ({
+          id: item.id,
+          coffeeId: item.coffeeId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice.toNumber(),
+        })),
+      };
+    });
   }
 }

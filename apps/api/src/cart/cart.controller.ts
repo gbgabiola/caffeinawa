@@ -50,4 +50,10 @@ export class CartController {
   clear(@Param('customerId') customerId: string) {
     return this.cartService.clear(customerId);
   }
+
+  // Checkout
+  @Post('checkout')
+  checkout(@Param('customerId') customerId: string) {
+    return this.cartService.checkout(customerId);
+  }
 }
