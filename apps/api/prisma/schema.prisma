@@ -18,6 +18,7 @@ model Coffee {
   updatedAt   DateTime       @updatedAt
 
   orderItems  OrderItem[]
+  cartItems   CartItem[]
 }
 
 model Customer {
@@ -25,6 +26,7 @@ model Customer {
   name    String
   email   String  @unique
 
+  cart    Cart?
   orders  Order[]
 }
 
@@ -48,6 +50,28 @@ model OrderItem {
 
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   coffee    Coffee   @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
+}
+
+model Cart {
+  id         String     @id @default(uuid())
+  customerId String     @unique
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      CartItem[]
+}
+
+model CartItem {
+  id       String @id @default(uuid())
+  cartId   String
+  coffeeId String
+  quantity Int
+
+  cart     Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  coffee   Coffee @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
+
+  @@unique([cartId, coffeeId])
 }
 
 enum CoffeeCategory {
