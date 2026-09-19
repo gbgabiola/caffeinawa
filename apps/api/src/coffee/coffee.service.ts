@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Coffee } from '@caffeinawa/types';
-import { CoffeeCategory as PrismaCoffeeCategory } from '@prisma/client';
+import { Prisma, CoffeeCategory as PrismaCoffeeCategory } from '@prisma/client';
 
 import { PrismaService } from '../database/prisma.service.js';
 import { CoffeeEntity } from './entities/coffee.entity.js';
@@ -97,8 +101,21 @@ export class CoffeeService {
   async remove(id: string): Promise<void> {
     await this.findOne(id);
 
-    await this.prisma.coffee.delete({
-      where: { id },
-    });
+    try {
+      await this.prisma.coffee.delete({
+        where: { id },
+      });
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'Coffee cannot be deleted because it is referenced by an existing order',
+        );
+      }
+
+      throw error;
+    }
   }
 }
