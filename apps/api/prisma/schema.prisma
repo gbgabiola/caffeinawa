@@ -19,6 +19,12 @@ model Coffee {
   updatedAt DateTime @updatedAt
 }
 
+model Customer {
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+}
+
 enum CoffeeCategory {
   espresso
   latte
