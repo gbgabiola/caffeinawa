@@ -38,6 +38,6 @@ export class CoffeeController {
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    this.coffeeService.remove(id);
+    return this.coffeeService.remove(id);
   }
 }

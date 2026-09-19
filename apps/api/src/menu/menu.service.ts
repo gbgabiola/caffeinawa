@@ -1,18 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
+import type { Coffee } from '@caffeinawa/types';
 
 import { CoffeeService } from '../coffee/coffee.service.js';
-import { MenuItemEntity } from './entities/menu-item.entity.js';
 import type { MenuQueryDto } from './dto/menu-query.dto.js';
+import { MenuItemEntity } from './entities/menu-item.entity.js';
 
 @Injectable()
 export class MenuService {
   constructor(private readonly coffeeService: CoffeeService) {}
 
-  findAll(query: MenuQueryDto): MenuItemEntity[] {
-    let coffees = this.coffeeService.findAll();
+  async findAll(query: MenuQueryDto): Promise<MenuItemEntity[]> {
+    let coffees: Coffee[] = await this.coffeeService.findAll();
 
-    if (query.category !== undefined) {
+    if (query.category) {
       coffees = coffees.filter((coffee) => coffee.category === query.category);
     }
 
@@ -25,8 +25,8 @@ export class MenuService {
     return coffees.map((coffee) => new MenuItemEntity(coffee));
   }
 
-  findOne(id: string): MenuItemEntity {
-    const coffee = this.coffeeService.findOne(id);
+  async findOne(id: string): Promise<MenuItemEntity> {
+    const coffee = await this.coffeeService.findOne(id);
 
     return new MenuItemEntity(coffee);
   }
