@@ -40,7 +40,8 @@ export class OrderService {
     });
   }
 
-  async findAll(customerId: string): Promise<Order[]> {
+  // Customer-facing: only return the authenticated customer's orders.
+  async findAllByCustomer(customerId: string): Promise<Order[]> {
     const orders = await this.prisma.order.findMany({
       where: {
         customerId,
@@ -56,9 +57,13 @@ export class OrderService {
     return orders.map((order) => this.toEntity(order));
   }
 
-  async findOne(id: string, customerId: string): Promise<Order> {
+  // Customer-facing: only return an order owned by the authenticated customer.
+  async findOneByCustomer(id: string, customerId: string): Promise<Order> {
     const order = await this.prisma.order.findUnique({
-      where: { id, customerId },
+      where: {
+        id,
+        customerId,
+      },
       include: {
         items: true,
       },
@@ -71,6 +76,7 @@ export class OrderService {
     return this.toEntity(order);
   }
 
+  // Customer-facing: customer identity always comes from the JWT.
   async create(customerId: string, dto: CreateOrderDto): Promise<Order> {
     const customer = await this.prisma.customer.findUnique({
       where: {
@@ -125,7 +131,7 @@ export class OrderService {
 
     const order = await this.prisma.order.create({
       data: {
-        customerId: customerId,
+        customerId,
         status: PrismaOrderStatus.PENDING,
         total: new Prisma.Decimal(total),
         items: {
@@ -140,15 +146,46 @@ export class OrderService {
     return this.toEntity(order);
   }
 
-  async update(
-    id: string,
-    customerId: string,
-    dto: UpdateOrderDto,
-  ): Promise<Order> {
-    await this.findOne(id, customerId);
+  // Admin-facing: return all orders.
+  async findAll(): Promise<Order[]> {
+    const orders = await this.prisma.order.findMany({
+      include: {
+        items: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return orders.map((order) => this.toEntity(order));
+  }
+
+  // Admin-facing: return any order by ID.
+  async findOne(id: string): Promise<Order> {
+    const order = await this.prisma.order.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order "${id}" not found`);
+    }
+
+    return this.toEntity(order);
+  }
+
+  // Admin-facing: update order status.
+  async update(id: string, dto: UpdateOrderDto): Promise<Order> {
+    await this.findOne(id);
 
     const order = await this.prisma.order.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
         status: dto.status.toUpperCase() as PrismaOrderStatus,
       },
@@ -158,13 +195,5 @@ export class OrderService {
     });
 
     return this.toEntity(order);
-  }
-
-  async remove(id: string, customerId: string): Promise<void> {
-    await this.findOne(id, customerId);
-
-    await this.prisma.order.delete({
-      where: { id },
-    });
   }
 }
