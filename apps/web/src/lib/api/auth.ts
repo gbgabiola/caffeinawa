@@ -54,7 +54,7 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
   return response.json();
 }
 
-export async function getCurrentCustomer(accessToken: string): Promise<Customer> {
+export async function getCurrentCustomer(accessToken: string): Promise<LoginCustomer> {
   const response = await fetch(`${API_URL}/auth/me`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,

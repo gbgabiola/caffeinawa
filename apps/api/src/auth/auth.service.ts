@@ -94,6 +94,7 @@ export class AuthService {
         id: true,
         name: true,
         email: true,
+        role: true,
       },
     });
 
