@@ -22,6 +22,11 @@ export interface LoginResponse {
   customer: LoginCustomer;
 }
 
+export interface UpdateCustomerInput {
+  name?: string;
+  email?: string;
+}
+
 export async function register(input: RegisterInput): Promise<Customer> {
   const response = await fetch(`${API_URL}/auth/register`, {
     method: 'POST',
@@ -63,6 +68,23 @@ export async function getCurrentCustomer(accessToken: string): Promise<LoginCust
 
   if (!response.ok) {
     throw new Error('Failed to fetch current customer');
+  }
+
+  return response.json();
+}
+
+export async function updateCurrentCustomer(accessToken: string, input: UpdateCustomerInput): Promise<Customer> {
+  const response = await fetch(`${API_URL}/customers/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update customer');
   }
 
   return response.json();

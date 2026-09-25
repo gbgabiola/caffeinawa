@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+
+type FormSubmitHandler = NonNullable<React.ComponentProps<'form'>['onSubmit']>;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +17,12 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, router]);
+
   if (isLoading) {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
@@ -23,30 +31,21 @@ export default function LoginPage() {
     );
   }
 
-  if (isAuthenticated) {
-    router.replace('/');
-    return null;
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit: FormSubmitHandler = async event => {
     event.preventDefault();
 
     setError('');
     setIsSubmitting(true);
 
     try {
-      await login({
-        email,
-        password,
-      });
-
+      await login({ email, password });
       router.replace('/');
     } catch {
       setError('Invalid email or password.');
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">

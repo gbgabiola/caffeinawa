@@ -20,6 +20,8 @@ import {
   type LoginCustomer,
   type RegisterInput,
   register as registerApi,
+  updateCurrentCustomer,
+  type UpdateCustomerInput,
 } from '@/lib/api/auth';
 
 const ACCESS_TOKEN_KEY = 'caffeinawa_access_token';
@@ -32,6 +34,7 @@ interface AuthContextValue {
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<Customer>;
   logout: () => void;
+  updateCustomer: (input: UpdateCustomerInput) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -133,6 +136,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setSessionResolved(true);
   }, []);
 
+  const updateCustomer = useCallback(
+    async (input: UpdateCustomerInput) => {
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      const updatedCustomer = await updateCurrentCustomer(token, input);
+
+      setCustomer(currentCustomer => {
+        if (!currentCustomer) {
+          return currentCustomer;
+        }
+
+        return {
+          ...currentCustomer,
+          ...updatedCustomer,
+        };
+      });
+    },
+    [token],
+  );
+
   const isLoading = token !== null && !sessionResolved;
 
   const value = useMemo<AuthContextValue>(
@@ -144,8 +169,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       register,
       logout,
+      updateCustomer,
     }),
-    [customer, token, isLoading, login, register, logout],
+    [customer, token, isLoading, login, register, logout, updateCustomer],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

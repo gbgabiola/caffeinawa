@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+
+type FormSubmitHandler = NonNullable<React.ComponentProps<'form'>['onSubmit']>;
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -17,6 +19,12 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, router]);
+
   if (isLoading) {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
@@ -25,12 +33,7 @@ export default function RegisterPage() {
     );
   }
 
-  if (isAuthenticated) {
-    router.replace('/');
-    return null;
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit: FormSubmitHandler = async event => {
     event.preventDefault();
 
     setError('');
@@ -55,7 +58,7 @@ export default function RegisterPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">
