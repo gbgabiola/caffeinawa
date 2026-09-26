@@ -69,6 +69,25 @@ function getServerSnapshot() {
   return null;
 }
 
+let authHydrated = false;
+const hydrationListeners = new Set<() => void>();
+
+function subscribeHydration(callback: () => void) {
+  hydrationListeners.add(callback);
+
+  return () => {
+    hydrationListeners.delete(callback);
+  };
+}
+
+function getHydrationSnapshot() {
+  return authHydrated;
+}
+
+function getServerHydrationSnapshot() {
+  return false;
+}
+
 function setAccessToken(token: string | null) {
   accessToken = token;
 
@@ -85,11 +104,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const token = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const [customer, setCustomer] = useState<LoginCustomer | null>(null);
-
   const [sessionResolved, setSessionResolved] = useState(false);
 
+  const isAuthHydrated = useSyncExternalStore(subscribeHydration, getHydrationSnapshot, getServerHydrationSnapshot);
+
   useEffect(() => {
-    if (!token) {
+    if (authHydrated) {
+      return;
+    }
+
+    authHydrated = true;
+    hydrationListeners.forEach(listener => listener());
+  }, []);
+
+  useEffect(() => {
+    if (token === null) {
       return;
     }
 
@@ -156,7 +185,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [token],
   );
 
-  const isLoading = token !== null && !sessionResolved;
+  const isLoading = !isAuthHydrated || (token !== null && !sessionResolved);
 
   const value = useMemo<AuthContextValue>(
     () => ({
