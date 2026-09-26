@@ -144,16 +144,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const updatedCustomer = await updateCurrentCustomer(token, input);
 
-      setCustomer(currentCustomer => {
-        if (!currentCustomer) {
-          return currentCustomer;
-        }
-
-        return {
-          ...currentCustomer,
-          ...updatedCustomer,
-        };
-      });
+      setCustomer(currentCustomer =>
+        currentCustomer
+          ? {
+              ...currentCustomer,
+              ...updatedCustomer,
+            }
+          : null,
+      );
     },
     [token],
   );
