@@ -4,9 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
 export async function getMenu(): Promise<Coffee[]> {
   const response = await fetch(`${API_URL}/menu`, {
-    next: {
-      revalidate: 60,
-    },
+    cache: 'no-store',
   });
 
   if (!response.ok) {
