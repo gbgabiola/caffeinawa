@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentProvider, PaymentStatus, Prisma } from '@prisma/client';
 import type { Cart, CartItem, Order, OrderStatus } from '@caffeinawa/types';
 
 import { PrismaService } from '../database/prisma.service.js';
@@ -189,21 +189,22 @@ export class CartService {
   // Checkout
   async checkout(
     customerId: string,
-    paymentProvider: 'cash' = 'cash',
-  ): Promise<Order> {
-    return this.prisma.$transaction(async (tx) => {
+    paymentProvider: 'cash' | 'paymongo' = 'cash',
+  ): Promise<
+    | Order
+    | {
+        order: Order;
+        payment: Awaited<ReturnType<PaymentService['findOne']>>;
+        checkoutUrl: string;
+      }
+  > {
+    const result = await this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: customerId },
       });
 
       if (!customer) {
         throw new NotFoundException(`Customer "${customerId}" not found`);
-      }
-
-      if (paymentProvider !== 'cash') {
-        throw new BadRequestException(
-          'The selected payment provider is not available yet',
-        );
       }
 
       const cart = await tx.cart.findUnique({
@@ -253,7 +254,18 @@ export class CartService {
         },
       });
 
-      await this.paymentService.createCashPayment(tx, order.id, total);
+      const payment = await tx.payment.create({
+        data: {
+          orderId: order.id,
+          provider:
+            paymentProvider === 'cash'
+              ? PaymentProvider.CASH
+              : PaymentProvider.PAYMONGO,
+          amount: total,
+          currency: 'PHP',
+          status: PaymentStatus.PENDING,
+        },
+      });
 
       await tx.cartItem.deleteMany({
         where: {
@@ -261,7 +273,7 @@ export class CartService {
         },
       });
 
-      return {
+      const orderEntity: Order = {
         id: order.id,
         customerId: order.customerId,
         status: order.status.toLowerCase() as OrderStatus,
@@ -274,6 +286,26 @@ export class CartService {
           unitPrice: item.unitPrice.toNumber(),
         })),
       };
+
+      return {
+        order: orderEntity,
+        paymentId: payment.id,
+        paymentProvider,
+      };
     });
+
+    if (result.paymentProvider === 'cash') {
+      return result.order;
+    }
+
+    const payment = await this.paymentService.createPayMongoPayment(
+      result.order.id,
+    );
+
+    return {
+      order: result.order,
+      payment: payment.payment,
+      checkoutUrl: payment.checkoutUrl,
+    };
   }
 }

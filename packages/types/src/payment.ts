@@ -8,6 +8,7 @@ export interface Payment {
   provider: PaymentProvider;
   checkoutSessionId?: string;
   paymentIntentId?: string;
+  providerEventId?: string;
   amount: number;
   currency: string;
   status: PaymentStatus;

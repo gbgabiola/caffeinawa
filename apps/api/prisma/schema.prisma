@@ -83,6 +83,7 @@ model Payment {
   provider          PaymentProvider @default(CASH)
   checkoutSessionId String?         @unique
   paymentIntentId   String?
+  providerEventId   String?         @unique
   amount            Decimal
   currency          String          @default("PHP")
   status            PaymentStatus   @default(PENDING)
