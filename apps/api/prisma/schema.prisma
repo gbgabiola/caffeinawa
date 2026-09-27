@@ -41,6 +41,7 @@ model Order {
 
   customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items      OrderItem[]
+  payments   Payment[]
 }
 
 model OrderItem {
@@ -76,6 +77,21 @@ model CartItem {
   @@unique([cartId, coffeeId])
 }
 
+model Payment {
+  id                String        @id @default(uuid())
+  orderId           String
+  provider          PaymentProvider @default(PAYMONGO)
+  checkoutSessionId String        @unique
+  paymentIntentId   String?
+  amount            Decimal
+  currency          String        @default("PHP")
+  status            PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+}
+
 enum CoffeeCategory {
   espresso
   latte
@@ -97,4 +113,16 @@ enum OrderStatus {
 enum CustomerRole {
   CUSTOMER
   ADMIN
+}
+
+enum PaymentProvider {
+  PAYMONGO
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
 }
