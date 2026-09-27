@@ -78,18 +78,19 @@ model CartItem {
 }
 
 model Payment {
-  id                String        @id @default(uuid())
+  id                String          @id @default(uuid())
   orderId           String
-  provider          PaymentProvider @default(PAYMONGO)
-  checkoutSessionId String        @unique
+  provider          PaymentProvider @default(CASH)
+  checkoutSessionId String?         @unique
   paymentIntentId   String?
   amount            Decimal
-  currency          String        @default("PHP")
-  status            PaymentStatus @default(PENDING)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  currency          String          @default("PHP")
+  status            PaymentStatus   @default(PENDING)
+  paidAt            DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  order             Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
 }
 
 enum CoffeeCategory {
@@ -116,6 +117,7 @@ enum CustomerRole {
 }
 
 enum PaymentProvider {
+  CASH
   PAYMONGO
 }
 

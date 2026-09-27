@@ -10,10 +10,14 @@ import { PrismaService } from '../database/prisma.service.js';
 import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 import { CartEntity } from './entities/cart.entity.js';
+import { PaymentService } from '../payment/payment.service.js';
 
 @Injectable()
 export class CartService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentService: PaymentService,
+  ) {}
 
   private toEntity(
     cart: Prisma.CartGetPayload<{
@@ -183,7 +187,10 @@ export class CartService {
   }
 
   // Checkout
-  async checkout(customerId: string): Promise<Order> {
+  async checkout(
+    customerId: string,
+    paymentProvider: 'cash' = 'cash',
+  ): Promise<Order> {
     return this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: customerId },
@@ -191,6 +198,12 @@ export class CartService {
 
       if (!customer) {
         throw new NotFoundException(`Customer "${customerId}" not found`);
+      }
+
+      if (paymentProvider !== 'cash') {
+        throw new BadRequestException(
+          'The selected payment provider is not available yet',
+        );
       }
 
       const cart = await tx.cart.findUnique({
@@ -239,6 +252,8 @@ export class CartService {
           items: true,
         },
       });
+
+      await this.paymentService.createCashPayment(tx, order.id, total);
 
       await tx.cartItem.deleteMany({
         where: {

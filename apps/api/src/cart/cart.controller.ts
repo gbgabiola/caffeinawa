@@ -14,6 +14,7 @@ import { CustomerOwnerGuard } from '../auth/guards/customer-owner.guard.js';
 import { CartService } from './cart.service.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
+import { CheckoutDto } from './dto/checkout.dto.js';
 
 @Controller('customers/:customerId/cart')
 @UseGuards(JwtAuthGuard, CustomerOwnerGuard)
@@ -56,7 +57,7 @@ export class CartController {
   }
 
   @Post('checkout')
-  checkout(@Param('customerId') customerId: string) {
-    return this.cartService.checkout(customerId);
+  checkout(@Param('customerId') customerId: string, @Body() dto: CheckoutDto) {
+    return this.cartService.checkout(customerId, dto.paymentProvider ?? 'cash');
   }
 }
