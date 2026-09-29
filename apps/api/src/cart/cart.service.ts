@@ -7,10 +7,11 @@ import { PaymentProvider, PaymentStatus, Prisma } from '@prisma/client';
 import type { Cart, CartItem, Order, OrderStatus } from '@caffeinawa/types';
 
 import { PrismaService } from '../database/prisma.service.js';
+import { PaymentEntity } from '../payment/entities/payment.entity.js';
+import { PaymentService } from '../payment/payment.service.js';
 import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 import { CartEntity } from './entities/cart.entity.js';
-import { PaymentService } from '../payment/payment.service.js';
 
 @Injectable()
 export class CartService {
@@ -186,7 +187,6 @@ export class CartService {
     return this.findOne(customerId);
   }
 
-  // Checkout
   async checkout(
     customerId: string,
     paymentProvider: 'cash' | 'paymongo' = 'cash',
@@ -194,11 +194,11 @@ export class CartService {
     | Order
     | {
         order: Order;
-        payment: Awaited<ReturnType<PaymentService['findOne']>>;
+        payment: PaymentEntity;
         checkoutUrl: string;
       }
   > {
-    const result = await this.prisma.$transaction(async (tx) => {
+    const order = await this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.findUnique({
         where: { id: customerId },
       });
@@ -241,7 +241,7 @@ export class CartService {
         new Prisma.Decimal(0),
       );
 
-      const order = await tx.order.create({
+      const createdOrder = await tx.order.create({
         data: {
           customerId,
           total,
@@ -254,18 +254,19 @@ export class CartService {
         },
       });
 
-      const payment = await tx.payment.create({
-        data: {
-          orderId: order.id,
-          provider:
-            paymentProvider === 'cash'
-              ? PaymentProvider.CASH
-              : PaymentProvider.PAYMONGO,
-          amount: total,
-          currency: 'PHP',
-          status: PaymentStatus.PENDING,
-        },
-      });
+      if (paymentProvider === 'cash') {
+        await this.paymentService.createCashPayment(tx, createdOrder.id, total);
+      } else {
+        await tx.payment.create({
+          data: {
+            orderId: createdOrder.id,
+            provider: PaymentProvider.PAYMONGO,
+            amount: total,
+            currency: 'PHP',
+            status: PaymentStatus.PENDING,
+          },
+        });
+      }
 
       await tx.cartItem.deleteMany({
         where: {
@@ -273,39 +274,31 @@ export class CartService {
         },
       });
 
-      const orderEntity: Order = {
-        id: order.id,
-        customerId: order.customerId,
-        status: order.status.toLowerCase() as OrderStatus,
-        total: order.total.toNumber(),
-        createdAt: order.createdAt.toISOString(),
-        items: order.items.map((item) => ({
+      return {
+        id: createdOrder.id,
+        customerId: createdOrder.customerId,
+        status: createdOrder.status.toLowerCase() as OrderStatus,
+        total: createdOrder.total.toNumber(),
+        createdAt: createdOrder.createdAt.toISOString(),
+        items: createdOrder.items.map((item) => ({
           id: item.id,
           coffeeId: item.coffeeId,
           quantity: item.quantity,
           unitPrice: item.unitPrice.toNumber(),
         })),
       };
-
-      return {
-        order: orderEntity,
-        paymentId: payment.id,
-        paymentProvider,
-      };
     });
 
-    if (result.paymentProvider === 'cash') {
-      return result.order;
+    if (paymentProvider === 'paymongo') {
+      const payment = await this.paymentService.createPayMongoPayment(order.id);
+
+      return {
+        order,
+        payment: payment.payment,
+        checkoutUrl: payment.checkoutUrl,
+      };
     }
 
-    const payment = await this.paymentService.createPayMongoPayment(
-      result.order.id,
-    );
-
-    return {
-      order: result.order,
-      payment: payment.payment,
-      checkoutUrl: payment.checkoutUrl,
-    };
+    return order;
   }
 }
