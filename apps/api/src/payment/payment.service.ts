@@ -187,6 +187,8 @@ export class PaymentService {
       id: string;
       type: string;
       attributes: {
+        type: string;
+        livemode: boolean;
         data: {
           id: string;
           type: string;
@@ -260,6 +262,7 @@ export class PaymentService {
     provider: PaymentProvider;
     checkoutSessionId: string | null;
     paymentIntentId: string | null;
+    providerEventId: string | null;
     amount: Prisma.Decimal;
     currency: string;
     status: PaymentStatus;
@@ -273,6 +276,7 @@ export class PaymentService {
       provider: payment.provider.toLowerCase() as PaymentEntity['provider'],
       checkoutSessionId: payment.checkoutSessionId ?? undefined,
       paymentIntentId: payment.paymentIntentId ?? undefined,
+      providerEventId: payment.providerEventId ?? undefined,
       amount: payment.amount.toNumber(),
       currency: payment.currency,
       status: payment.status.toLowerCase() as PaymentEntity['status'],

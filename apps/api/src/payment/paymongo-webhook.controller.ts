@@ -18,20 +18,24 @@ interface PayMongoWebhookRequest extends Request {
 interface PayMongoWebhookEvent {
   data: {
     id: string;
-    type: string;
+    type: 'event';
     attributes: {
+      type: string;
       livemode: boolean;
       data: {
         id: string;
-        type: string;
+        type: 'checkout_session';
         attributes: {
           reference_number?: string;
-          status?: string;
           payment_intent?: {
             id?: string;
           };
         };
       };
+      previous_data?: Record<string, unknown>;
+      pending_webhooks?: number;
+      created_at?: number;
+      updated_at?: number;
     };
   };
 }
@@ -56,7 +60,9 @@ export class PayMongoWebhookController {
       request.rawBody.toString('utf8'),
     ) as PayMongoWebhookEvent;
 
-    if (event.data.type === 'checkout_session.payment.paid') {
+    console.log('[PayMongo webhook]', JSON.stringify(event, null, 2));
+
+    if (event.data.attributes.type === 'checkout_session.payment.paid') {
       await this.paymentService.handlePayMongoPaymentPaid(
         event.data,
         request.rawBody,
