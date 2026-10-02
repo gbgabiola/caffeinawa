@@ -60,8 +60,6 @@ export class PayMongoWebhookController {
       request.rawBody.toString('utf8'),
     ) as PayMongoWebhookEvent;
 
-    console.log('[PayMongo webhook]', JSON.stringify(event, null, 2));
-
     if (event.data.attributes.type === 'checkout_session.payment.paid') {
       await this.paymentService.handlePayMongoPaymentPaid(
         event.data,
