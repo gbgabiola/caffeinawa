@@ -6,6 +6,7 @@ export class PaymentEntity implements Payment {
   provider: Payment['provider'];
   checkoutSessionId?: string;
   paymentIntentId?: string;
+  providerEventId?: string;
   amount: number;
   currency: string;
   status: Payment['status'];
@@ -19,6 +20,7 @@ export class PaymentEntity implements Payment {
     this.provider = payment.provider;
     this.checkoutSessionId = payment.checkoutSessionId;
     this.paymentIntentId = payment.paymentIntentId;
+    this.providerEventId = payment.providerEventId;
     this.amount = payment.amount;
     this.currency = payment.currency;
     this.status = payment.status;
