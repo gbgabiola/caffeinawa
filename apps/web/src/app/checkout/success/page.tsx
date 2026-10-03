@@ -54,8 +54,6 @@ function SuccessContent() {
     }
 
     let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
 
     async function checkPaymentStatus() {
       const currentOrder = await loadOrder();
@@ -83,11 +81,11 @@ function SuccessContent() {
 
     void checkPaymentStatus();
 
-    intervalId = setInterval(() => {
+    const intervalId = setInterval(() => {
       void checkPaymentStatus();
     }, PAYMENT_POLL_INTERVAL_MS);
 
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       if (cancelled) {
         return;
       }

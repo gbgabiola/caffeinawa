@@ -57,11 +57,22 @@ export function Header() {
             {!isLoading && isAuthenticated && customer && (
               <>
                 <li>
+                  <Link href="/cart" className="transition-opacity hover:opacity-60">
+                    Cart
+                  </Link>
+                </li>
+                <li>
                   <Link href="/account" className="transition-opacity hover:opacity-60">
                     {customer.name}
                   </Link>
                 </li>
-
+                <li>
+                  {customer.role === 'ADMIN' && (
+                    <Link href="/admin" className="transition-opacity hover:opacity-60">
+                      Admin
+                    </Link>
+                  )}
+                </li>
                 <li>
                   <button type="button" onClick={handleLogout} className="transition-opacity hover:opacity-60">
                     Sign out
