@@ -43,7 +43,7 @@ function statusClasses(status: PaymentStatus): string {
 }
 
 export default function AdminPaymentsPage() {
-  const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
+  const { accessToken } = useAuth();
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
@@ -69,7 +69,7 @@ export default function AdminPaymentsPage() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (isLoading || !isAuthenticated || customer?.role !== 'ADMIN') {
+    if (!accessToken) {
       return;
     }
 
@@ -84,7 +84,7 @@ export default function AdminPaymentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [customer?.role, isAuthenticated, isLoading, loadPayments]);
+  }, [accessToken, loadPayments]);
 
   async function handleMarkAsPaid(paymentId: string) {
     if (!accessToken) {
@@ -105,33 +105,6 @@ export default function AdminPaymentsPage() {
     } finally {
       setUpdatingPaymentId(null);
     }
-  }
-
-  if (isLoading) {
-    return (
-      <main className="p-6">
-        <p className="text-sm text-gray-500">Checking authorization...</p>
-      </main>
-    );
-  }
-
-  if (!isAuthenticated || customer?.role !== 'ADMIN') {
-    return (
-      <main className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6">
-          <h1 className="text-xl font-semibold text-red-900">Access denied</h1>
-
-          <p className="mt-2 text-sm text-red-700">Administrator access is required to view payments.</p>
-
-          <Link
-            href="/"
-            className="mt-5 inline-block rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-          >
-            Return home
-          </Link>
-        </div>
-      </main>
-    );
   }
 
   return (

@@ -28,7 +28,7 @@ function formatStatus(status: OrderStatus) {
 }
 
 export default function AdminOrdersPage() {
-  const { accessToken, customer, isLoading } = useAuth();
+  const { accessToken } = useAuth();
 
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function AdminOrdersPage() {
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isLoading || !accessToken || customer?.role !== 'ADMIN') {
+    if (!accessToken) {
       return;
     }
 
@@ -66,21 +66,9 @@ export default function AdminOrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, customer?.role, isLoading]);
+  }, [accessToken]);
 
   const isFetching = fetchState === 'idle' || fetchState === 'loading';
-
-  if (isLoading) {
-    return (
-      <div className="px-6 py-8 lg:px-8">
-        <p className="text-sm text-gray-600">Checking admin access...</p>
-      </div>
-    );
-  }
-
-  if (!customer || customer.role !== 'ADMIN') {
-    return null;
-  }
 
   async function handleStatusChange(orderId: string, status: OrderStatus) {
     if (!accessToken) {

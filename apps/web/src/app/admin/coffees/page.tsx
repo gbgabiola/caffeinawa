@@ -27,7 +27,7 @@ const EMPTY_FORM: CoffeeFormState = {
 };
 
 export default function AdminCoffeesPage() {
-  const { accessToken, customer, isLoading } = useAuth();
+  const { accessToken } = useAuth();
 
   const [coffees, setCoffees] = useState<Coffee[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export default function AdminCoffeesPage() {
   const [deletingCoffeeId, setDeletingCoffeeId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isLoading || !accessToken || customer?.role !== 'ADMIN') {
+    if (!accessToken) {
       return;
     }
 
@@ -73,21 +73,9 @@ export default function AdminCoffeesPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, customer?.role, isLoading]);
+  }, [accessToken]);
 
   const isFetching = fetchState === 'idle' || fetchState === 'loading';
-
-  if (isLoading) {
-    return (
-      <div className="px-6 py-8 lg:px-8">
-        <p className="text-sm text-gray-600">Checking admin access...</p>
-      </div>
-    );
-  }
-
-  if (!customer || customer.role !== 'ADMIN') {
-    return null;
-  }
 
   function resetForm() {
     setForm(EMPTY_FORM);

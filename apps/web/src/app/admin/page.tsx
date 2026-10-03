@@ -1,38 +1,6 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
 
 export default function AdminPage() {
-  const router = useRouter();
-  const { customer, isLoading } = useAuth();
-
-  useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    if (!customer) {
-      router.replace('/login');
-      return;
-    }
-
-    if (customer.role !== 'ADMIN') {
-      router.replace('/');
-    }
-  }, [customer, isLoading, router]);
-
-  if (isLoading || !customer || customer.role !== 'ADMIN') {
-    return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
-        <p className="text-sm text-gray-600">Checking admin access...</p>
-      </main>
-    );
-  }
-
   return (
     <div className="px-6 py-8 lg:px-8">
       <div className="mx-auto max-w-6xl">
