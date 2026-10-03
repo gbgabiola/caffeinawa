@@ -51,24 +51,30 @@ export default function AdminCoffeesPage() {
 
     let cancelled = false;
 
-    getAdminCoffees(accessToken)
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
 
-        setCoffees(data);
-        setError(null);
-        setFetchState('success');
-      })
-      .catch(error => {
-        if (cancelled) {
-          return;
-        }
+      void getAdminCoffees(accessToken)
+        .then(data => {
+          if (cancelled) {
+            return;
+          }
 
-        setError(error instanceof Error ? error.message : 'Unable to load coffees.');
-        setFetchState('error');
-      });
+          setCoffees(data);
+          setError(null);
+          setFetchState('success');
+        })
+        .catch(error => {
+          if (cancelled) {
+            return;
+          }
+
+          setError(error instanceof Error ? error.message : 'Unable to load coffees.');
+          setFetchState('error');
+        });
+    });
 
     return () => {
       cancelled = true;

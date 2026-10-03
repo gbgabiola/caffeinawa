@@ -33,24 +33,30 @@ export default function AdminCustomersPage() {
 
     let cancelled = false;
 
-    getAdminCustomers(accessToken)
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
 
-        setCustomers(data);
-        setError(null);
-        setFetchState('success');
-      })
-      .catch(error => {
-        if (cancelled) {
-          return;
-        }
+      void getAdminCustomers(accessToken)
+        .then(data => {
+          if (cancelled) {
+            return;
+          }
 
-        setError(error instanceof Error ? error.message : 'Unable to load customers.');
-        setFetchState('error');
-      });
+          setCustomers(data);
+          setError(null);
+          setFetchState('success');
+        })
+        .catch(error => {
+          if (cancelled) {
+            return;
+          }
+
+          setError(error instanceof Error ? error.message : 'Unable to load customers.');
+          setFetchState('error');
+        });
+    });
 
     return () => {
       cancelled = true;

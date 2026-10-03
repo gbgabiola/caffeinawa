@@ -44,24 +44,30 @@ export default function AdminOrdersPage() {
 
     let cancelled = false;
 
-    getAdminOrders(accessToken)
-      .then(data => {
-        if (cancelled) {
-          return;
-        }
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
 
-        setOrders(data);
-        setError(null);
-        setFetchState('success');
-      })
-      .catch(error => {
-        if (cancelled) {
-          return;
-        }
+      void getAdminOrders(accessToken)
+        .then(data => {
+          if (cancelled) {
+            return;
+          }
 
-        setError(error instanceof Error ? error.message : 'Unable to load orders.');
-        setFetchState('error');
-      });
+          setOrders(data);
+          setError(null);
+          setFetchState('success');
+        })
+        .catch(error => {
+          if (cancelled) {
+            return;
+          }
+
+          setError(error instanceof Error ? error.message : 'Unable to load orders.');
+          setFetchState('error');
+        });
+    });
 
     return () => {
       cancelled = true;
