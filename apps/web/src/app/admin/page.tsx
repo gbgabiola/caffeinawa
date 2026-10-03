@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+import Link from 'next/link';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -63,6 +64,15 @@ export default function AdminPage() {
             <p className="mt-2 text-2xl font-semibold text-gray-900">—</p>
             <p className="mt-1 text-sm text-gray-500">Catalog management</p>
           </div>
+
+          <Link
+            href="/admin/payments"
+            className="block rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
+          >
+            <p className="text-sm font-medium text-gray-500">Payments</p>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">—</p>
+            <p className="mt-2 text-sm text-gray-500">View payments and confirm cash transactions.</p>
+          </Link>
         </div>
       </div>
     </div>
