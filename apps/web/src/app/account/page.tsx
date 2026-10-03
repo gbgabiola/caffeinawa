@@ -67,7 +67,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
             maxLength={100}
             value={name}
             onChange={event => setName(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+            className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 shadow-sm outline-none transition focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
           />
         </div>
 
@@ -85,7 +85,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
             maxLength={255}
             value={email}
             onChange={event => setEmail(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+            className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 shadow-sm outline-none transition focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
           />
         </div>
 
