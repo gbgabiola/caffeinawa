@@ -73,7 +73,17 @@ export default function AdminPaymentsPage() {
       return;
     }
 
-    void loadPayments();
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadPayments();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [customer?.role, isAuthenticated, isLoading, loadPayments]);
 
   async function handleMarkAsPaid(paymentId: string) {
