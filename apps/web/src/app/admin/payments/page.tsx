@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 
-import type { Payment, PaymentProvider, PaymentStatus } from '@caffeinawa/types';
+import type { AdminPayment, PaymentProvider, PaymentStatus } from '@caffeinawa/types';
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getAdminPayments, markAdminPaymentAsPaid } from '@/lib/api/admin-payments';
@@ -45,7 +44,7 @@ function statusClasses(status: PaymentStatus): string {
 export default function AdminPaymentsPage() {
   const { accessToken } = useAuth();
 
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,157 +107,142 @@ export default function AdminPaymentsPage() {
   }
 
   return (
-    <main className="p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Payments</h1>
-
-          <p className="mt-1 text-sm text-gray-500">Monitor customer payments and confirm cash transactions.</p>
+          <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Payments</h1>
+          <p className="mt-3 text-gray-600">Monitor payment status and confirm cash payments.</p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void loadPayments()}
-          disabled={loadingPayments}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loadingPayments ? 'Refreshing...' : 'Refresh'}
-        </button>
-      </div>
-
-      {error && (
-        <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white">
-        {loadingPayments ? (
-          <div className="p-8 text-center text-sm text-gray-500">Loading payments...</div>
-        ) : payments.length === 0 ? (
-          <div className="p-8 text-center">
-            <h2 className="font-medium text-gray-900">No payments yet</h2>
-
-            <p className="mt-1 text-sm text-gray-500">Payments will appear here after customers place orders.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Payment
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Order
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Provider
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Amount
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Status
-                  </th>
-
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Paid
-                  </th>
-
-                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {payments.map(payment => {
-                  const updating = updatingPaymentId === payment.id;
-                  const canMarkAsPaid = payment.provider === 'cash' && payment.status === 'pending';
-
-                  return (
-                    <tr key={payment.id} className="align-top">
-                      <td className="px-6 py-4">
-                        <p className="max-w-48 break-all text-sm font-medium text-gray-900">{payment.id}</p>
-
-                        <p className="mt-1 text-xs text-gray-500">
-                          Created {dateFormatter.format(new Date(payment.createdAt))}
-                        </p>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <Link
-                          href={`/admin/orders?orderId=${encodeURIComponent(payment.orderId)}`}
-                          className="break-all text-sm font-medium text-gray-900 hover:underline"
-                        >
-                          {payment.orderId}
-                        </Link>
-                      </td>
-
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        {formatProvider(payment.provider)}
-
-                        {payment.checkoutSessionId && (
-                          <p className="mt-1 max-w-40 break-all text-xs text-gray-500">
-                            Session: {payment.checkoutSessionId}
-                          </p>
-                        )}
-
-                        {payment.paymentIntentId && (
-                          <p className="mt-1 max-w-40 break-all text-xs text-gray-500">
-                            Intent: {payment.paymentIntentId}
-                          </p>
-                        )}
-
-                        {payment.providerEventId && (
-                          <p className="mt-1 max-w-40 break-all text-xs text-gray-500">
-                            Event: {payment.providerEventId}
-                          </p>
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
-                        {currencyFormatter.format(payment.amount)}
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses(payment.status)}`}
-                        >
-                          {formatStatus(payment.status)}
-                        </span>
-                      </td>
-
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
-                        {payment.paidAt ? dateFormatter.format(new Date(payment.paidAt)) : '—'}
-                      </td>
-
-                      <td className="px-6 py-4 text-right">
-                        {canMarkAsPaid ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleMarkAsPaid(payment.id)}
-                            disabled={updating}
-                            className="whitespace-nowrap rounded-lg bg-black px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-                          >
-                            {updating ? 'Updating...' : 'Mark as paid'}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {error && (
+          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
         )}
+
+        <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          {loadingPayments ? (
+            <div className="px-6 py-12 text-center text-sm text-gray-500">Loading payments...</div>
+          ) : payments.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-gray-500">No payments found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Customer
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Order
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Payment method
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Amount
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Paid
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-200">
+                  {payments.map(payment => {
+                    const itemCount = payment.order.items.reduce((total, item) => total + item.quantity, 0);
+
+                    const itemSummary = payment.order.items
+                      .map(item => `${item.quantity}× ${item.coffeeName}`)
+                      .join(', ');
+
+                    return (
+                      <tr key={payment.id}>
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <p className="font-medium text-gray-900">{payment.order.customer.name}</p>
+                          <p className="mt-1 text-sm text-gray-500">{payment.order.customer.email}</p>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <p className="font-medium text-gray-900">
+                            {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                          </p>
+                          <p className="mt-1 max-w-xs text-sm text-gray-500">{itemSummary}</p>
+                        </td>
+
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <p className="font-medium text-gray-900">{formatProvider(payment.provider)}</p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Created {dateFormatter.format(new Date(payment.createdAt))}
+                          </p>
+                        </td>
+
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                          {currencyFormatter.format(payment.amount)}
+                        </td>
+
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses(payment.status)}`}
+                          >
+                            {formatStatus(payment.status)}
+                          </span>
+                        </td>
+
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                          {payment.paidAt ? dateFormatter.format(new Date(payment.paidAt)) : '—'}
+                        </td>
+
+                        <td className="whitespace-nowrap px-6 py-4">
+                          {payment.provider === 'cash' && payment.status === 'pending' ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleMarkAsPaid(payment.id)}
+                              disabled={updatingPaymentId === payment.id}
+                              className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {updatingPaymentId === payment.id ? 'Updating...' : 'Mark as paid'}
+                            </button>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );

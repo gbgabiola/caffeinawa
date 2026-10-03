@@ -1,4 +1,4 @@
-import type { Payment } from '@caffeinawa/types';
+import type { AdminPayment } from '@caffeinawa/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
@@ -19,7 +19,7 @@ function getErrorMessage(status: number, body: string): string {
         }
       }
     } catch {
-      // Fall back to the status-specific message below.
+      // Fall back to status-specific message.
     }
   }
 
@@ -62,16 +62,16 @@ async function request<T>(accessToken: string, path: string, options: RequestIni
   return JSON.parse(body) as T;
 }
 
-export function getAdminPayments(accessToken: string): Promise<Payment[]> {
-  return request<Payment[]>(accessToken, '/admin/payments');
+export function getAdminPayments(accessToken: string): Promise<AdminPayment[]> {
+  return request<AdminPayment[]>(accessToken, '/admin/payments');
 }
 
-export function getAdminPayment(accessToken: string, paymentId: string): Promise<Payment> {
-  return request<Payment>(accessToken, `/admin/payments/${encodeURIComponent(paymentId)}`);
+export function getAdminPayment(accessToken: string, paymentId: string): Promise<AdminPayment> {
+  return request<AdminPayment>(accessToken, `/admin/payments/${encodeURIComponent(paymentId)}`);
 }
 
-export function markAdminPaymentAsPaid(accessToken: string, paymentId: string): Promise<Payment> {
-  return request<Payment>(accessToken, `/admin/payments/${encodeURIComponent(paymentId)}/mark-paid`, {
+export function markAdminPaymentAsPaid(accessToken: string, paymentId: string): Promise<AdminPayment> {
+  return request<AdminPayment>(accessToken, `/admin/payments/${encodeURIComponent(paymentId)}/mark-paid`, {
     method: 'PATCH',
   });
 }

@@ -9,10 +9,38 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client';
+import type { AdminPayment } from '@caffeinawa/types';
 
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentEntity } from './entities/payment.entity.js';
 import { PayMongoService } from './paymongo.service.js';
+
+const ADMIN_PAYMENT_INCLUDE = {
+  order: {
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      items: {
+        include: {
+          coffee: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.PaymentInclude;
+
+type AdminPaymentRecord = Prisma.PaymentGetPayload<{
+  include: typeof ADMIN_PAYMENT_INCLUDE;
+}>;
 
 @Injectable()
 export class PaymentService {
@@ -21,26 +49,26 @@ export class PaymentService {
     private readonly payMongoService: PayMongoService,
   ) {}
 
-  async findAll(): Promise<PaymentEntity[]> {
+  async findAll(): Promise<AdminPayment[]> {
     const payments = await this.prisma.payment.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
+      include: ADMIN_PAYMENT_INCLUDE,
+      orderBy: { createdAt: 'desc' },
     });
 
-    return payments.map((payment) => this.toEntity(payment));
+    return payments.map((payment) => this.toAdminEntity(payment));
   }
 
-  async findOne(id: string): Promise<PaymentEntity> {
+  async findOne(id: string): Promise<AdminPayment> {
     const payment = await this.prisma.payment.findUnique({
       where: { id },
+      include: ADMIN_PAYMENT_INCLUDE,
     });
 
     if (!payment) {
       throw new NotFoundException(`Payment "${id}" not found`);
     }
 
-    return this.toEntity(payment);
+    return this.toAdminEntity(payment);
   }
 
   async createCashPayment(
@@ -61,7 +89,7 @@ export class PaymentService {
     return this.toEntity(payment);
   }
 
-  async markCashPaymentAsPaid(id: string): Promise<PaymentEntity> {
+  async markCashPaymentAsPaid(id: string): Promise<AdminPayment> {
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id },
@@ -78,7 +106,16 @@ export class PaymentService {
       }
 
       if (payment.status === PaymentStatus.PAID) {
-        return this.toEntity(payment);
+        const existingPayment = await tx.payment.findUnique({
+          where: { id },
+          include: ADMIN_PAYMENT_INCLUDE,
+        });
+
+        if (!existingPayment) {
+          throw new NotFoundException(`Payment "${id}" not found`);
+        }
+
+        return this.toAdminEntity(existingPayment);
       }
 
       if (payment.status !== PaymentStatus.PENDING) {
@@ -96,15 +133,20 @@ export class PaymentService {
       });
 
       await tx.order.update({
-        where: {
-          id: payment.orderId,
-        },
-        data: {
-          status: OrderStatus.CONFIRMED,
-        },
+        where: { id: payment.orderId },
+        data: { status: OrderStatus.CONFIRMED },
       });
 
-      return this.toEntity(updatedPayment);
+      const updatedPaymentWithRelations = await tx.payment.findUnique({
+        where: { id: updatedPayment.id },
+        include: ADMIN_PAYMENT_INCLUDE,
+      });
+
+      if (!updatedPaymentWithRelations) {
+        throw new NotFoundException(`Payment "${id}" not found`);
+      }
+
+      return this.toAdminEntity(updatedPaymentWithRelations);
     });
   }
 
@@ -113,9 +155,7 @@ export class PaymentService {
     checkoutUrl: string;
   }> {
     const order = await this.prisma.order.findUnique({
-      where: {
-        id: orderId,
-      },
+      where: { id: orderId },
       include: {
         customer: true,
         items: {
@@ -158,12 +198,8 @@ export class PaymentService {
 
     const payment = existingPayment
       ? await this.prisma.payment.update({
-          where: {
-            id: existingPayment.id,
-          },
-          data: {
-            checkoutSessionId: session.sessionId,
-          },
+          where: { id: existingPayment.id },
+          data: { checkoutSessionId: session.sessionId },
         })
       : await this.prisma.payment.create({
           data: {
@@ -194,9 +230,7 @@ export class PaymentService {
           type: string;
           attributes: {
             reference_number?: string;
-            payment_intent?: {
-              id?: string;
-            };
+            payment_intent?: { id?: string };
           };
         };
       };
@@ -209,9 +243,7 @@ export class PaymentService {
 
     await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findFirst({
-        where: {
-          checkoutSessionId,
-        },
+        where: { checkoutSessionId },
       });
 
       if (!payment) {
@@ -234,9 +266,7 @@ export class PaymentService {
       }
 
       const updatedPayment = await tx.payment.update({
-        where: {
-          id: payment.id,
-        },
+        where: { id: payment.id },
         data: {
           status: PaymentStatus.PAID,
           paymentIntentId,
@@ -246,14 +276,28 @@ export class PaymentService {
       });
 
       await tx.order.update({
-        where: {
-          id: updatedPayment.orderId,
-        },
-        data: {
-          status: OrderStatus.CONFIRMED,
-        },
+        where: { id: updatedPayment.orderId },
+        data: { status: OrderStatus.CONFIRMED },
       });
     });
+  }
+
+  private toAdminEntity(payment: AdminPaymentRecord): AdminPayment {
+    return {
+      ...this.toEntity(payment),
+      order: {
+        customer: {
+          id: payment.order.customer.id,
+          name: payment.order.customer.name,
+          email: payment.order.customer.email,
+        },
+        items: payment.order.items.map((item) => ({
+          coffeeName: item.coffee.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice.toNumber(),
+        })),
+      },
+    };
   }
 
   private toEntity(payment: {

@@ -1,29 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-import type { OrderStatus } from '@caffeinawa/types';
+import type { AdminOrder, OrderStatus } from '@caffeinawa/types';
 
 import { useAuth } from '@/components/auth/AuthProvider';
-import { getAdminOrders, updateAdminOrder, type AdminOrder } from '@/lib/api/admin-orders';
+import { getAdminOrders, updateAdminOrder } from '@/lib/api/admin-orders';
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
   }).format(value);
 }
 
-function formatDate(value: string) {
+function formatDate(value: string): string {
   return new Intl.DateTimeFormat('en-PH', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
 }
 
-function formatStatus(status: OrderStatus) {
+function formatStatus(status: OrderStatus): string {
   return status.replace('_', ' ');
 }
 
@@ -33,7 +32,6 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
@@ -96,74 +94,95 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="px-6 py-8 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
         <div>
           <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
-
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Orders</h1>
-
-          <p className="mt-3 text-gray-600">View customer orders and manage their current status.</p>
+          <p className="mt-3 text-gray-600">View customer orders and manage their status.</p>
         </div>
 
+        {error && (
+          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         {updateError && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {updateError}
           </div>
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           {isFetching ? (
-            <div className="p-6">
-              <p className="text-sm text-gray-600">Loading orders...</p>
-            </div>
-          ) : error ? (
-            <div className="p-6">
-              <p className="text-sm font-medium text-red-600">{error}</p>
-            </div>
+            <div className="px-6 py-12 text-center text-sm text-gray-500">Loading orders...</div>
           ) : orders.length === 0 ? (
-            <div className="p-6">
-              <p className="text-sm text-gray-600">No orders found.</p>
-            </div>
+            <div className="px-6 py-12 text-center text-sm text-gray-500">No orders found.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 font-medium text-gray-600">Customer</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Items</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Total</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Status</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Created</th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Customer
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Items
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Total
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      Created
+                    </th>
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-200">
                   {orders.map(order => {
-                    const isUpdating = updatingOrderId === order.id;
+                    const itemCount = order.items.reduce((total, item) => total + item.quantity, 0);
 
                     return (
                       <tr key={order.id}>
-                        <td className="px-6 py-4 align-top">
-                          <div>
-                            <p className="font-medium text-gray-900">Customer</p>
-                            <p className="break-all text-sm text-gray-500">{order.customerId}</p>
-                          </div>
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <p className="font-medium text-gray-900">{order.customer.name}</p>
+                          <p className="mt-1 text-sm text-gray-500">{order.customer.email}</p>
                         </td>
 
-                        <td className="px-6 py-4 align-top text-gray-600">
-                          {order.items.reduce((total, item) => total + item.quantity, 0)}
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                          {itemCount} {itemCount === 1 ? 'item' : 'items'}
                         </td>
 
-                        <td className="px-6 py-4 align-top font-medium text-gray-900">{formatCurrency(order.total)}</td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                          {formatCurrency(order.total)}
+                        </td>
 
-                        <td className="px-6 py-4 align-top">
+                        <td className="whitespace-nowrap px-6 py-4">
                           <select
                             value={order.status}
-                            disabled={isUpdating}
-                            onChange={event => handleStatusChange(order.id, event.target.value as OrderStatus)}
-                            aria-label={`Status for order ${order.id}`}
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm capitalize text-gray-700 outline-none focus:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            onChange={event => void handleStatusChange(order.id, event.target.value as OrderStatus)}
+                            disabled={updatingOrderId === order.id}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm capitalize text-gray-700 shadow-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Update status for ${order.customer.name}'s order`}
                           >
                             {ORDER_STATUSES.map(status => (
                               <option key={status} value={status}>
@@ -173,7 +192,9 @@ export default function AdminOrdersPage() {
                           </select>
                         </td>
 
-                        <td className="px-6 py-4 align-top text-gray-600">{formatDate(order.createdAt)}</td>
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                          {formatDate(order.createdAt)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -183,6 +204,6 @@ export default function AdminOrdersPage() {
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
