@@ -149,11 +149,15 @@ export default function AdminCoffeesPage() {
           category: form.category,
           price,
           available: form.available,
-          ...(imageUrl ? { imageUrl } : {}),
+          imageUrl: form.imageUrl.trim() || undefined,
         });
 
-        setCoffees(current => current.map(item => (item.id === updatedCoffee.id ? updatedCoffee : item)));
+        setCoffees(currentCoffees =>
+          currentCoffees.map(coffee => (coffee.id === updatedCoffee.id ? updatedCoffee : coffee)),
+        );
 
+        setEditingCoffeeId(null);
+        setSaveError(null);
         setSaveSuccess('Coffee updated successfully.');
       } else {
         const createdCoffee = await createAdminCoffee(accessToken, {
@@ -274,7 +278,7 @@ export default function AdminCoffeesPage() {
                       name: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                 />
               </div>
 
@@ -292,7 +296,7 @@ export default function AdminCoffeesPage() {
                       category: event.target.value as CoffeeCategory,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                 >
                   {COFFEE_CATEGORIES.map(category => (
                     <option key={category} value={category}>
@@ -319,7 +323,7 @@ export default function AdminCoffeesPage() {
                       price: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                 />
               </div>
 
@@ -339,7 +343,7 @@ export default function AdminCoffeesPage() {
                     }))
                   }
                   placeholder="https://..."
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                 />
               </div>
 
@@ -358,7 +362,7 @@ export default function AdminCoffeesPage() {
                       description: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-gray-500"
+                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                 />
               </div>
 

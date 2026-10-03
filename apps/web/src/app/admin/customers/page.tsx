@@ -105,14 +105,16 @@ export default function AdminCustomersPage() {
 
     try {
       const updatedCustomer = await updateAdminCustomer(accessToken, editingCustomerId, {
-        name,
-        email,
+        name: form.name.trim(),
+        email: form.email.trim(),
       });
 
       setCustomers(currentCustomers =>
-        currentCustomers.map(item => (item.id === updatedCustomer.id ? updatedCustomer : item)),
+        currentCustomers.map(customer => (customer.id === updatedCustomer.id ? updatedCustomer : customer)),
       );
 
+      setEditingCustomerId(null);
+      setSaveError(null);
       setSaveSuccess('Customer updated successfully.');
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to update customer.');
@@ -186,7 +188,7 @@ export default function AdminCustomersPage() {
                                   name: event.target.value,
                                 }))
                               }
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
+                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                               aria-label="Customer name"
                             />
                           ) : (
@@ -205,7 +207,7 @@ export default function AdminCustomersPage() {
                                   email: event.target.value,
                                 }))
                               }
-                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
+                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                               aria-label="Customer email"
                             />
                           ) : (
