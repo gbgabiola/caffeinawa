@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { AdminOrder, OrderStatus } from '@caffeinawa/types';
 
+import Pagination, { ADMIN_PAGE_SIZE } from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getAdminOrders, updateAdminOrder } from '@/lib/api/admin-orders';
 
@@ -34,6 +35,8 @@ export default function AdminOrdersPage() {
   const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     if (!accessToken) {
@@ -92,6 +95,9 @@ export default function AdminOrdersPage() {
       setUpdatingOrderId(null);
     }
   }
+
+  const totalPages = Math.ceil(orders.length / ADMIN_PAGE_SIZE);
+  const paginatedOrders = orders.slice((currentPage - 1) * ADMIN_PAGE_SIZE, currentPage * ADMIN_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8">
@@ -158,7 +164,7 @@ export default function AdminOrdersPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {orders.map(order => {
+                  {paginatedOrders.map(order => {
                     const itemCount = order.items.reduce((total, item) => total + item.quantity, 0);
 
                     return (
@@ -200,6 +206,13 @@ export default function AdminOrdersPage() {
                   })}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={orders.length}
+                pageSize={ADMIN_PAGE_SIZE}
+                onPageChange={setCurrentPage}
+              />
             </div>
           )}
         </div>

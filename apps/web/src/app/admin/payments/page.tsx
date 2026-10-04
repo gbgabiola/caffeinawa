@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { AdminPayment, PaymentProvider, PaymentStatus } from '@caffeinawa/types';
 
+import Pagination, { ADMIN_PAGE_SIZE } from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getAdminPayments, markAdminPaymentAsPaid } from '@/lib/api/admin-payments';
 
@@ -48,6 +49,8 @@ export default function AdminPaymentsPage() {
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadPayments = useCallback(async () => {
     if (!accessToken) {
@@ -105,6 +108,9 @@ export default function AdminPaymentsPage() {
       setUpdatingPaymentId(null);
     }
   }
+
+  const totalPages = Math.ceil(payments.length / ADMIN_PAGE_SIZE);
+  const paginatedPayments = payments.slice((currentPage - 1) * ADMIN_PAGE_SIZE, currentPage * ADMIN_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8">
@@ -177,7 +183,7 @@ export default function AdminPaymentsPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {payments.map(payment => {
+                  {paginatedPayments.map(payment => {
                     const itemCount = payment.order.items.reduce((total, item) => total + item.quantity, 0);
 
                     const itemSummary = payment.order.items
@@ -240,6 +246,13 @@ export default function AdminPaymentsPage() {
                   })}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={payments.length}
+                pageSize={ADMIN_PAGE_SIZE}
+                onPageChange={setCurrentPage}
+              />
             </div>
           )}
         </div>
