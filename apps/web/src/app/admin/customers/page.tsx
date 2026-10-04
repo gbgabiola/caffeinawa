@@ -10,6 +10,11 @@ interface CustomerFormState {
   email: string;
 }
 
+const EMPTY_CUSTOMER_FORM: CustomerFormState = {
+  name: '',
+  email: '',
+};
+
 export default function AdminCustomersPage() {
   const { accessToken } = useAuth();
 
@@ -18,10 +23,8 @@ export default function AdminCustomersPage() {
   const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
-  const [form, setForm] = useState<CustomerFormState>({
-    name: '',
-    email: '',
-  });
+  const [form, setForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM);
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -65,11 +68,17 @@ export default function AdminCustomersPage() {
 
   const isFetching = fetchState === 'idle' || fetchState === 'loading';
 
-  function startEditing(item: AdminCustomer) {
-    setEditingCustomerId(item.id);
+  const editingCustomer = customers.find(customer => customer.id === editingCustomerId);
+
+  const hasChanges = editingCustomer
+    ? form.name.trim() !== editingCustomer.name.trim() || form.email.trim() !== editingCustomer.email.trim()
+    : false;
+
+  function startEditing(customer: AdminCustomer) {
+    setEditingCustomerId(customer.id);
     setForm({
-      name: item.name,
-      email: item.email,
+      name: customer.name,
+      email: customer.email,
     });
     setSaveError(null);
     setSaveSuccess(null);
@@ -77,16 +86,13 @@ export default function AdminCustomersPage() {
 
   function cancelEditing() {
     setEditingCustomerId(null);
-    setForm({
-      name: '',
-      email: '',
-    });
+    setForm(EMPTY_CUSTOMER_FORM);
     setSaveError(null);
     setSaveSuccess(null);
   }
 
   async function handleSave() {
-    if (!accessToken || !editingCustomerId) {
+    if (!accessToken || !editingCustomerId || !hasChanges) {
       return;
     }
 
@@ -105,8 +111,8 @@ export default function AdminCustomersPage() {
 
     try {
       const updatedCustomer = await updateAdminCustomer(accessToken, editingCustomerId, {
-        name: form.name.trim(),
-        email: form.email.trim(),
+        name,
+        email,
       });
 
       setCustomers(currentCustomers =>
@@ -114,6 +120,7 @@ export default function AdminCustomersPage() {
       );
 
       setEditingCustomerId(null);
+      setForm(EMPTY_CUSTOMER_FORM);
       setSaveError(null);
       setSaveSuccess('Customer updated successfully.');
     } catch (error) {
@@ -172,11 +179,11 @@ export default function AdminCustomersPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {customers.map(item => {
-                    const isEditing = editingCustomerId === item.id;
+                  {customers.map(customer => {
+                    const isEditing = editingCustomerId === customer.id;
 
                     return (
-                      <tr key={item.id}>
+                      <tr key={customer.id}>
                         <td className="px-6 py-4 align-top">
                           {isEditing ? (
                             <input
@@ -188,11 +195,11 @@ export default function AdminCustomersPage() {
                                   name: event.target.value,
                                 }))
                               }
-                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                               aria-label="Customer name"
                             />
                           ) : (
-                            <span className="font-medium text-gray-900">{item.name}</span>
+                            <span className="font-medium text-gray-900">{customer.name}</span>
                           )}
                         </td>
 
@@ -207,17 +214,17 @@ export default function AdminCustomersPage() {
                                   email: event.target.value,
                                 }))
                               }
-                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
                               aria-label="Customer email"
                             />
                           ) : (
-                            <span className="text-gray-600">{item.email}</span>
+                            <span className="text-gray-600">{customer.email}</span>
                           )}
                         </td>
 
                         <td className="px-6 py-4 align-top">
                           <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                            {item.role}
+                            {customer.role}
                           </span>
                         </td>
 
@@ -226,8 +233,8 @@ export default function AdminCustomersPage() {
                             <div className="flex gap-2">
                               <button
                                 type="button"
-                                onClick={handleSave}
-                                disabled={isSaving}
+                                onClick={() => void handleSave()}
+                                disabled={isSaving || !hasChanges}
                                 className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {isSaving ? 'Saving...' : 'Save'}
@@ -245,7 +252,7 @@ export default function AdminCustomersPage() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => startEditing(item)}
+                              onClick={() => startEditing(customer)}
                               className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
                             >
                               Edit

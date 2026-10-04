@@ -17,7 +17,7 @@ interface CoffeeFormState {
   imageUrl: string;
 }
 
-const EMPTY_FORM: CoffeeFormState = {
+const EMPTY_COFFEE_FORM: CoffeeFormState = {
   name: '',
   description: '',
   category: 'espresso',
@@ -25,6 +25,9 @@ const EMPTY_FORM: CoffeeFormState = {
   available: true,
   imageUrl: '',
 };
+
+const FORM_CONTROL_CLASS_NAME =
+  'mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200';
 
 export default function AdminCoffeesPage() {
   const { accessToken } = useAuth();
@@ -35,13 +38,13 @@ export default function AdminCoffeesPage() {
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingCoffeeId, setEditingCoffeeId] = useState<string | null>(null);
-
-  const [form, setForm] = useState<CoffeeFormState>(EMPTY_FORM);
+  const [form, setForm] = useState<CoffeeFormState>(EMPTY_COFFEE_FORM);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
+  const [coffeePendingDeletion, setCoffeePendingDeletion] = useState<Coffee | null>(null);
   const [deletingCoffeeId, setDeletingCoffeeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,10 +84,39 @@ export default function AdminCoffeesPage() {
     };
   }, [accessToken]);
 
+  useEffect(() => {
+    if (!coffeePendingDeletion) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !deletingCoffeeId) {
+        setCoffeePendingDeletion(null);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [coffeePendingDeletion, deletingCoffeeId]);
+
   const isFetching = fetchState === 'idle' || fetchState === 'loading';
 
+  const editingCoffee = coffees.find(coffee => coffee.id === editingCoffeeId);
+
+  const hasChanges = editingCoffee
+    ? form.name.trim() !== editingCoffee.name.trim() ||
+      form.description.trim() !== editingCoffee.description.trim() ||
+      form.category !== editingCoffee.category ||
+      Number(form.price) !== editingCoffee.price ||
+      form.available !== editingCoffee.available ||
+      form.imageUrl.trim() !== (editingCoffee.imageUrl ?? '').trim()
+    : false;
+
   function resetForm() {
-    setForm(EMPTY_FORM);
+    setForm(EMPTY_COFFEE_FORM);
     setIsCreating(false);
     setEditingCoffeeId(null);
     setSaveError(null);
@@ -92,7 +124,7 @@ export default function AdminCoffeesPage() {
   }
 
   function startCreating() {
-    setForm(EMPTY_FORM);
+    setForm(EMPTY_COFFEE_FORM);
     setIsCreating(true);
     setEditingCoffeeId(null);
     setSaveError(null);
@@ -125,6 +157,10 @@ export default function AdminCoffeesPage() {
     const imageUrl = form.imageUrl.trim();
     const price = Number(form.price);
 
+    if (editingCoffeeId && !hasChanges) {
+      return;
+    }
+
     if (!name || !description) {
       setSaveError('Name and description are required.');
       setSaveSuccess(null);
@@ -149,7 +185,7 @@ export default function AdminCoffeesPage() {
           category: form.category,
           price,
           available: form.available,
-          imageUrl: form.imageUrl.trim() || undefined,
+          imageUrl: imageUrl || undefined,
         });
 
         setCoffees(currentCoffees =>
@@ -157,6 +193,7 @@ export default function AdminCoffeesPage() {
         );
 
         setEditingCoffeeId(null);
+        setForm(EMPTY_COFFEE_FORM);
         setSaveError(null);
         setSaveSuccess('Coffee updated successfully.');
       } else {
@@ -169,9 +206,10 @@ export default function AdminCoffeesPage() {
           ...(imageUrl ? { imageUrl } : {}),
         });
 
-        setCoffees(current => [...current, createdCoffee]);
+        setCoffees(currentCoffees => [...currentCoffees, createdCoffee]);
+
         setSaveSuccess('Coffee created successfully.');
-        setForm(EMPTY_FORM);
+        setForm(EMPTY_COFFEE_FORM);
       }
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to save coffee.');
@@ -180,34 +218,37 @@ export default function AdminCoffeesPage() {
     }
   }
 
-  async function handleDelete(coffee: Coffee) {
-    if (!accessToken) {
+  function requestDelete(coffee: Coffee) {
+    setCoffeePendingDeletion(coffee);
+    setSaveError(null);
+    setSaveSuccess(null);
+  }
+
+  async function confirmDelete() {
+    if (!accessToken || !coffeePendingDeletion) {
       return;
     }
 
-    const confirmed = window.confirm(`Delete "${coffee.name}"? This action cannot be undone.`);
-
-    if (!confirmed) {
-      return;
-    }
+    const coffee = coffeePendingDeletion;
 
     setDeletingCoffeeId(coffee.id);
     setError(null);
+    setSaveError(null);
+    setSaveSuccess(null);
 
     try {
       await deleteAdminCoffee(accessToken, coffee.id);
 
-      setCoffees(current => current.filter(item => item.id !== coffee.id));
+      setCoffees(currentCoffees => currentCoffees.filter(item => item.id !== coffee.id));
 
       if (editingCoffeeId === coffee.id) {
         resetForm();
       }
 
       setSaveSuccess('Coffee deleted successfully.');
-      setSaveError(null);
+      setCoffeePendingDeletion(null);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to delete coffee.');
-      setSaveSuccess(null);
     } finally {
       setDeletingCoffeeId(null);
     }
@@ -278,7 +319,7 @@ export default function AdminCoffeesPage() {
                       name: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                  className={FORM_CONTROL_CLASS_NAME}
                 />
               </div>
 
@@ -296,7 +337,7 @@ export default function AdminCoffeesPage() {
                       category: event.target.value as CoffeeCategory,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                  className={FORM_CONTROL_CLASS_NAME}
                 >
                   {COFFEE_CATEGORIES.map(category => (
                     <option key={category} value={category}>
@@ -323,7 +364,7 @@ export default function AdminCoffeesPage() {
                       price: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                  className={FORM_CONTROL_CLASS_NAME}
                 />
               </div>
 
@@ -343,7 +384,7 @@ export default function AdminCoffeesPage() {
                     }))
                   }
                   placeholder="https://..."
-                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                  className={FORM_CONTROL_CLASS_NAME}
                 />
               </div>
 
@@ -362,7 +403,7 @@ export default function AdminCoffeesPage() {
                       description: event.target.value,
                     }))
                   }
-                  className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm outline-none focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                  className={FORM_CONTROL_CLASS_NAME}
                 />
               </div>
 
@@ -386,8 +427,8 @@ export default function AdminCoffeesPage() {
             <div className="mt-6 flex gap-2">
               <button
                 type="button"
-                onClick={handleSave}
-                disabled={isSaving}
+                onClick={() => void handleSave()}
+                disabled={isSaving || (Boolean(editingCoffeeId) && !hasChanges)}
                 className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? 'Saving...' : editingCoffeeId ? 'Save Changes' : 'Create Coffee'}
@@ -474,7 +515,7 @@ export default function AdminCoffeesPage() {
 
                           <button
                             type="button"
-                            onClick={() => handleDelete(coffee)}
+                            onClick={() => requestDelete(coffee)}
                             disabled={deletingCoffeeId === coffee.id}
                             className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -490,6 +531,58 @@ export default function AdminCoffeesPage() {
           )}
         </div>
       </div>
+      {coffeePendingDeletion && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          role="presentation"
+          onClick={() => {
+            if (!deletingCoffeeId) {
+              setCoffeePendingDeletion(null);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-coffee-title"
+            aria-describedby="delete-coffee-description"
+            onClick={event => event.stopPropagation()}
+          >
+            <div>
+              <h2 id="delete-coffee-title" className="text-lg font-semibold text-gray-900">
+                Delete coffee?
+              </h2>
+
+              <p id="delete-coffee-description" className="mt-2 text-sm leading-6 text-gray-600">
+                Are you sure you want to delete{' '}
+                <span className="font-medium text-gray-900">{coffeePendingDeletion.name}</span>? This action cannot be
+                undone.
+              </p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCoffeePendingDeletion(null)}
+                disabled={Boolean(deletingCoffeeId)}
+                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={Boolean(deletingCoffeeId)}
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingCoffeeId ? 'Deleting...' : 'Delete Coffee'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

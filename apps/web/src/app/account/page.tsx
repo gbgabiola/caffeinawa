@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import type { LoginCustomer, UpdateCustomerInput } from '@/lib/api/auth';
-
 import { useAuth } from '@/components/auth/AuthProvider';
 
 type FormSubmitHandler = NonNullable<React.ComponentProps<'form'>['onSubmit']>;
@@ -22,8 +21,14 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  const hasChanges = name.trim() !== customer.name.trim() || email.trim() !== customer.email.trim();
+
   const handleSubmit: FormSubmitHandler = async event => {
     event.preventDefault();
+
+    if (!hasChanges || isSaving) {
+      return;
+    }
 
     setMessage('');
     setError('');
@@ -31,8 +36,8 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
 
     try {
       await updateCustomer({
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim(),
       });
 
       setMessage('Your profile has been updated.');
@@ -67,7 +72,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
             maxLength={100}
             value={name}
             onChange={event => setName(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 shadow-sm outline-none transition focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+            className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
           />
         </div>
 
@@ -85,7 +90,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
             maxLength={255}
             value={email}
             onChange={event => setEmail(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-400 shadow-sm outline-none transition focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+            className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
           />
         </div>
 
@@ -104,7 +109,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !hasChanges}
             className="rounded-lg bg-black px-5 py-3 font-medium text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save changes'}
@@ -126,6 +131,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
 
 export default function AccountPage() {
   const router = useRouter();
+
   const { customer, isAuthenticated, isLoading, updateCustomer, logout } = useAuth();
 
   useEffect(() => {
