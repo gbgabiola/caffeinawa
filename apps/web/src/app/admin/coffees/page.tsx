@@ -212,8 +212,11 @@ export default function AdminCoffeesPage() {
 
         setCoffees(currentCoffees => [...currentCoffees, createdCoffee]);
 
-        setSaveSuccess('Coffee created successfully.');
+        setIsCreating(false);
+        setEditingCoffeeId(null);
         setForm(EMPTY_COFFEE_FORM);
+        setSaveError(null);
+        setSaveSuccess('Coffee created successfully.');
       }
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to save coffee.');
