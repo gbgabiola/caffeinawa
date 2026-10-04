@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
+import AdminListState from '@/components/admin/AdminListState';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useAdminList } from '@/hooks/useAdminList';
 import { usePagination } from '@/hooks/usePagination';
 import { getAdminCustomers, updateAdminCustomer, type AdminCustomer } from '@/lib/api/admin-customers';
 
@@ -20,9 +22,12 @@ const EMPTY_CUSTOMER_FORM: CustomerFormState = {
 export default function AdminCustomersPage() {
   const { accessToken } = useAuth();
 
-  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const {
+    data: customers,
+    setData: setCustomers,
+    error,
+    status: fetchStatus,
+  } = useAdminList(accessToken, getAdminCustomers, 'Unable to load customers.');
 
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM);
@@ -32,45 +37,6 @@ export default function AdminCustomersPage() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(customers);
-
-  useEffect(() => {
-    if (!accessToken) {
-      return;
-    }
-
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-
-      void getAdminCustomers(accessToken)
-        .then(data => {
-          if (cancelled) {
-            return;
-          }
-
-          setCustomers(data);
-          setError(null);
-          setFetchState('success');
-        })
-        .catch(error => {
-          if (cancelled) {
-            return;
-          }
-
-          setError(error instanceof Error ? error.message : 'Unable to load customers.');
-          setFetchState('error');
-        });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
-
-  const isFetching = fetchState === 'idle' || fetchState === 'loading';
 
   const editingCustomer = customers.find(customer => customer.id === editingCustomerId);
 
@@ -158,19 +124,13 @@ export default function AdminCustomersPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          {isFetching ? (
-            <div className="p-6">
-              <p className="text-sm text-gray-600">Loading customers...</p>
-            </div>
-          ) : error ? (
-            <div className="p-6">
-              <p className="text-sm font-medium text-red-600">{error}</p>
-            </div>
-          ) : customers.length === 0 ? (
-            <div className="p-6">
-              <p className="text-sm text-gray-600">No customers found.</p>
-            </div>
-          ) : (
+          <AdminListState
+            status={fetchStatus}
+            error={error}
+            isEmpty={customers.length === 0}
+            loadingMessage="Loading customers..."
+            emptyMessage="No customers found."
+          >
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-gray-200 bg-gray-50">
@@ -276,7 +236,7 @@ export default function AdminCustomersPage() {
                 onPageChange={setCurrentPage}
               />
             </div>
-          )}
+          </AdminListState>
         </div>
       </div>
     </div>

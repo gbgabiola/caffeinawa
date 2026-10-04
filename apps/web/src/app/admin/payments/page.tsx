@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 
-import type { AdminPayment, PaymentProvider, PaymentStatus } from '@caffeinawa/types';
+import type { PaymentProvider, PaymentStatus } from '@caffeinawa/types';
 
+import AdminListState from '@/components/admin/AdminListState';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useAdminList } from '@/hooks/useAdminList';
 import { usePagination } from '@/hooks/usePagination';
 import { getAdminPayments, markAdminPaymentAsPaid } from '@/lib/api/admin-payments';
 
@@ -46,48 +48,17 @@ function statusClasses(status: PaymentStatus): string {
 export default function AdminPaymentsPage() {
   const { accessToken } = useAuth();
 
-  const [payments, setPayments] = useState<AdminPayment[]>([]);
-  const [loadingPayments, setLoadingPayments] = useState(true);
+  const {
+    data: payments,
+    setData: setPayments,
+    error,
+    status: fetchStatus,
+  } = useAdminList(accessToken, getAdminPayments, 'Unable to load payments.');
+
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(payments);
-
-  const loadPayments = useCallback(async () => {
-    if (!accessToken) {
-      return;
-    }
-
-    setLoadingPayments(true);
-    setError(null);
-
-    try {
-      const result = await getAdminPayments(accessToken);
-      setPayments(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load payments.');
-    } finally {
-      setLoadingPayments(false);
-    }
-  }, [accessToken]);
-
-  useEffect(() => {
-    if (!accessToken) {
-      return;
-    }
-
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (!cancelled) {
-        void loadPayments();
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, loadPayments]);
 
   async function handleMarkAsPaid(paymentId: string) {
     if (!accessToken) {
@@ -95,7 +66,7 @@ export default function AdminPaymentsPage() {
     }
 
     setUpdatingPaymentId(paymentId);
-    setError(null);
+    setUpdateError(null);
 
     try {
       const updatedPayment = await markAdminPaymentAsPaid(accessToken, paymentId);
@@ -103,8 +74,8 @@ export default function AdminPaymentsPage() {
       setPayments(currentPayments =>
         currentPayments.map(payment => (payment.id === updatedPayment.id ? updatedPayment : payment)),
       );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to mark payment as paid.');
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : 'Unable to mark payment as paid.');
     } finally {
       setUpdatingPaymentId(null);
     }
@@ -119,18 +90,20 @@ export default function AdminPaymentsPage() {
           <p className="mt-3 text-gray-600">Monitor payment status and confirm cash payments.</p>
         </div>
 
-        {error && (
+        {updateError && (
           <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+            {updateError}
           </div>
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          {loadingPayments ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-500">Loading payments...</div>
-          ) : payments.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-500">No payments found.</div>
-          ) : (
+          <AdminListState
+            status={fetchStatus}
+            error={error}
+            isEmpty={payments.length === 0}
+            loadingMessage="Loading payments..."
+            emptyMessage="No payments found."
+          >
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -244,6 +217,7 @@ export default function AdminPaymentsPage() {
                   })}
                 </tbody>
               </table>
+
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -252,7 +226,7 @@ export default function AdminPaymentsPage() {
                 onPageChange={setCurrentPage}
               />
             </div>
-          )}
+          </AdminListState>
         </div>
       </div>
     </main>

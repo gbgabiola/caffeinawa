@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { AdminOrder, OrderStatus } from '@caffeinawa/types';
+import { useState } from 'react';
 
+import type { OrderStatus } from '@caffeinawa/types';
+import AdminListState from '@/components/admin/AdminListState';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { usePagination } from '@/hooks/usePagination';
+import { useAdminList } from '@/hooks/useAdminList';
 import { getAdminOrders, updateAdminOrder } from '@/lib/api/admin-orders';
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
@@ -31,52 +33,17 @@ function formatStatus(status: OrderStatus): string {
 export default function AdminOrdersPage() {
   const { accessToken } = useAuth();
 
-  const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const {
+    data: orders,
+    setData: setOrders,
+    error,
+    status: fetchStatus,
+  } = useAdminList(accessToken, getAdminOrders, 'Unable to load orders.');
+
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(orders);
-
-  useEffect(() => {
-    if (!accessToken) {
-      return;
-    }
-
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-
-      void getAdminOrders(accessToken)
-        .then(data => {
-          if (cancelled) {
-            return;
-          }
-
-          setOrders(data);
-          setError(null);
-          setFetchState('success');
-        })
-        .catch(error => {
-          if (cancelled) {
-            return;
-          }
-
-          setError(error instanceof Error ? error.message : 'Unable to load orders.');
-          setFetchState('error');
-        });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
-
-  const isFetching = fetchState === 'idle' || fetchState === 'loading';
 
   async function handleStatusChange(orderId: string, status: OrderStatus) {
     if (!accessToken) {
@@ -106,12 +73,6 @@ export default function AdminOrdersPage() {
           <p className="mt-3 text-gray-600">View customer orders and manage their status.</p>
         </div>
 
-        {error && (
-          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
         {updateError && (
           <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {updateError}
@@ -119,11 +80,13 @@ export default function AdminOrdersPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          {isFetching ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-500">Loading orders...</div>
-          ) : orders.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-500">No orders found.</div>
-          ) : (
+          <AdminListState
+            status={fetchStatus}
+            error={error}
+            isEmpty={orders.length === 0}
+            loadingMessage="Loading orders..."
+            emptyMessage="No orders found."
+          >
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -204,6 +167,7 @@ export default function AdminOrdersPage() {
                   })}
                 </tbody>
               </table>
+
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -212,7 +176,7 @@ export default function AdminOrdersPage() {
                 onPageChange={setCurrentPage}
               />
             </div>
-          )}
+          </AdminListState>
         </div>
       </div>
     </main>

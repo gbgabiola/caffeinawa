@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
 
+import AdminListState from '@/components/admin/AdminListState';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useAdminList } from '@/hooks/useAdminList';
 import { usePagination } from '@/hooks/usePagination';
 import { createAdminCoffee, deleteAdminCoffee, getAdminCoffees, updateAdminCoffee } from '@/lib/api/admin-coffees';
 
@@ -34,9 +36,12 @@ const FORM_CONTROL_CLASS_NAME =
 export default function AdminCoffeesPage() {
   const { accessToken } = useAuth();
 
-  const [coffees, setCoffees] = useState<Coffee[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const {
+    data: coffees,
+    setData: setCoffees,
+    error,
+    status: fetchStatus,
+  } = useAdminList(accessToken, getAdminCoffees, 'Unable to load coffees.');
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingCoffeeId, setEditingCoffeeId] = useState<string | null>(null);
@@ -50,43 +55,6 @@ export default function AdminCoffeesPage() {
   const [deletingCoffeeId, setDeletingCoffeeId] = useState<string | null>(null);
 
   const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(coffees);
-
-  useEffect(() => {
-    if (!accessToken) {
-      return;
-    }
-
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-
-      void getAdminCoffees(accessToken)
-        .then(data => {
-          if (cancelled) {
-            return;
-          }
-
-          setCoffees(data);
-          setError(null);
-          setFetchState('success');
-        })
-        .catch(error => {
-          if (cancelled) {
-            return;
-          }
-
-          setError(error instanceof Error ? error.message : 'Unable to load coffees.');
-          setFetchState('error');
-        });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
 
   useEffect(() => {
     if (!coffeePendingDeletion) {
@@ -105,8 +73,6 @@ export default function AdminCoffeesPage() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [coffeePendingDeletion, deletingCoffeeId]);
-
-  const isFetching = fetchState === 'idle' || fetchState === 'loading';
 
   const editingCoffee = coffees.find(coffee => coffee.id === editingCoffeeId);
 
@@ -239,7 +205,7 @@ export default function AdminCoffeesPage() {
     const coffee = coffeePendingDeletion;
 
     setDeletingCoffeeId(coffee.id);
-    setError(null);
+    setSaveError(null);
     setSaveError(null);
     setSaveSuccess(null);
 
@@ -454,19 +420,13 @@ export default function AdminCoffeesPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          {isFetching ? (
-            <div className="p-6">
-              <p className="text-sm text-gray-600">Loading coffees...</p>
-            </div>
-          ) : error ? (
-            <div className="p-6">
-              <p className="text-sm font-medium text-red-600">{error}</p>
-            </div>
-          ) : coffees.length === 0 ? (
-            <div className="p-6">
-              <p className="text-sm text-gray-600">No coffees found.</p>
-            </div>
-          ) : (
+          <AdminListState
+            status={fetchStatus}
+            error={error}
+            isEmpty={coffees.length === 0}
+            loadingMessage="Loading coffees..."
+            emptyMessage="No coffees found."
+          >
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-gray-200 bg-gray-50">
@@ -542,7 +502,7 @@ export default function AdminCoffeesPage() {
                 onPageChange={setCurrentPage}
               />
             </div>
-          )}
+          </AdminListState>
         </div>
       </div>
       {coffeePendingDeletion && (
