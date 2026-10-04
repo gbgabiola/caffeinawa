@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
 
-import Pagination, { ADMIN_PAGE_SIZE } from '@/components/admin/Pagination';
+import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { usePagination } from '@/hooks/usePagination';
 import { createAdminCoffee, deleteAdminCoffee, getAdminCoffees, updateAdminCoffee } from '@/lib/api/admin-coffees';
 
 const COFFEE_CATEGORIES: CoffeeCategory[] = ['espresso', 'latte', 'cappuccino', 'americano', 'cold_brew', 'non_coffee'];
@@ -48,7 +49,7 @@ export default function AdminCoffeesPage() {
   const [coffeePendingDeletion, setCoffeePendingDeletion] = useState<Coffee | null>(null);
   const [deletingCoffeeId, setDeletingCoffeeId] = useState<string | null>(null);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(coffees);
 
   useEffect(() => {
     if (!accessToken) {
@@ -256,9 +257,6 @@ export default function AdminCoffeesPage() {
       setDeletingCoffeeId(null);
     }
   }
-
-  const totalPages = Math.ceil(coffees.length / ADMIN_PAGE_SIZE);
-  const paginatedCoffees = coffees.slice((currentPage - 1) * ADMIN_PAGE_SIZE, currentPage * ADMIN_PAGE_SIZE);
 
   return (
     <div className="px-6 py-8 lg:px-8">
@@ -479,7 +477,7 @@ export default function AdminCoffeesPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {paginatedCoffees.map(coffee => (
+                  {paginatedItems.map(coffee => (
                     <tr key={coffee.id}>
                       <td className="px-6 py-4 align-top">
                         <div>
@@ -537,7 +535,7 @@ export default function AdminCoffeesPage() {
                 currentPage={currentPage}
                 totalPages={totalPages}
                 totalItems={coffees.length}
-                pageSize={ADMIN_PAGE_SIZE}
+                pageSize={pageSize}
                 onPageChange={setCurrentPage}
               />
             </div>

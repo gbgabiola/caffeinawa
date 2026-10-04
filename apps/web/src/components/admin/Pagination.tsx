@@ -6,8 +6,6 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
 }
 
-export const ADMIN_PAGE_SIZE = 10;
-
 export default function Pagination({ currentPage, totalPages, totalItems, pageSize, onPageChange }: PaginationProps) {
   if (totalItems <= pageSize) {
     return null;

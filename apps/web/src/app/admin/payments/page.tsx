@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { AdminPayment, PaymentProvider, PaymentStatus } from '@caffeinawa/types';
 
-import Pagination, { ADMIN_PAGE_SIZE } from '@/components/admin/Pagination';
+import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { usePagination } from '@/hooks/usePagination';
 import { getAdminPayments, markAdminPaymentAsPaid } from '@/lib/api/admin-payments';
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
@@ -50,7 +51,7 @@ export default function AdminPaymentsPage() {
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(payments);
 
   const loadPayments = useCallback(async () => {
     if (!accessToken) {
@@ -108,9 +109,6 @@ export default function AdminPaymentsPage() {
       setUpdatingPaymentId(null);
     }
   }
-
-  const totalPages = Math.ceil(payments.length / ADMIN_PAGE_SIZE);
-  const paginatedPayments = payments.slice((currentPage - 1) * ADMIN_PAGE_SIZE, currentPage * ADMIN_PAGE_SIZE);
 
   return (
     <main className="p-6 lg:p-8">
@@ -183,7 +181,7 @@ export default function AdminPaymentsPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {paginatedPayments.map(payment => {
+                  {paginatedItems.map(payment => {
                     const itemCount = payment.order.items.reduce((total, item) => total + item.quantity, 0);
 
                     const itemSummary = payment.order.items
@@ -250,7 +248,7 @@ export default function AdminPaymentsPage() {
                 currentPage={currentPage}
                 totalPages={totalPages}
                 totalItems={payments.length}
-                pageSize={ADMIN_PAGE_SIZE}
+                pageSize={pageSize}
                 onPageChange={setCurrentPage}
               />
             </div>

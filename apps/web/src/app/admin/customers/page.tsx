@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 
-import Pagination, { ADMIN_PAGE_SIZE } from '@/components/admin/Pagination';
+import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { usePagination } from '@/hooks/usePagination';
 import { getAdminCustomers, updateAdminCustomer, type AdminCustomer } from '@/lib/api/admin-customers';
 
 interface CustomerFormState {
@@ -30,7 +31,7 @@ export default function AdminCustomersPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
-  const [currentPage, setCurrentPage] = useState(1);
+  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(customers);
 
   useEffect(() => {
     if (!accessToken) {
@@ -133,9 +134,6 @@ export default function AdminCustomersPage() {
     }
   }
 
-  const totalPages = Math.ceil(customers.length / ADMIN_PAGE_SIZE);
-  const paginatedCustomers = customers.slice((currentPage - 1) * ADMIN_PAGE_SIZE, currentPage * ADMIN_PAGE_SIZE);
-
   return (
     <div className="px-6 py-8 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -185,7 +183,7 @@ export default function AdminCustomersPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {paginatedCustomers.map(customer => {
+                  {paginatedItems.map(customer => {
                     const isEditing = editingCustomerId === customer.id;
 
                     return (
@@ -274,7 +272,7 @@ export default function AdminCustomersPage() {
                 currentPage={currentPage}
                 totalPages={totalPages}
                 totalItems={customers.length}
-                pageSize={ADMIN_PAGE_SIZE}
+                pageSize={pageSize}
                 onPageChange={setCurrentPage}
               />
             </div>
