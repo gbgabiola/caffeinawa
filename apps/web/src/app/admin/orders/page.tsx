@@ -1,14 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 
-import type { OrderStatus } from '@caffeinawa/types';
+import { useQueryClient } from '@tanstack/react-query';
+
 import AdminListState from '@/components/admin/AdminListState';
+import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { usePagination } from '@/hooks/usePagination';
-import { useAdminList } from '@/hooks/useAdminList';
+import { ADMIN_PAGE_SIZE } from '@/constants/admin';
+import { useAdminListQuery } from '@/hooks/useAdminListQuery';
 import { getAdminOrders, updateAdminOrder } from '@/lib/api/admin-orders';
+
+import type { OrderStatus } from '@caffeinawa/types';
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
 
@@ -32,31 +36,42 @@ function formatStatus(status: OrderStatus): string {
 
 export default function AdminOrdersPage() {
   const { accessToken } = useAuth();
-
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
+  const [currentPage, setCurrentPage] = useState(1);
   const {
-    data: orders,
-    setData: setOrders,
+    items: orders,
+    meta,
     error,
     status: fetchStatus,
-  } = useAdminList(accessToken, getAdminOrders, 'Unable to load orders.');
-
+  } = useAdminListQuery({
+    accessToken,
+    queryKey: [
+      'admin',
+      'orders',
+      { page: currentPage, pageSize: ADMIN_PAGE_SIZE, search: deferredSearch, status: statusFilter },
+    ],
+    queryFn: token =>
+      getAdminOrders(token, {
+        page: currentPage,
+        pageSize: ADMIN_PAGE_SIZE,
+        search: deferredSearch,
+        ...(statusFilter ? { status: statusFilter } : {}),
+      }),
+  });
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
-
-  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(orders);
-
   async function handleStatusChange(orderId: string, status: OrderStatus) {
     if (!accessToken) {
       return;
     }
-
     setUpdatingOrderId(orderId);
     setUpdateError(null);
-
     try {
-      const updatedOrder = await updateAdminOrder(accessToken, orderId, status);
-
-      setOrders(currentOrders => currentOrders.map(order => (order.id === updatedOrder.id ? updatedOrder : order)));
+      await updateAdminOrder(accessToken, orderId, status);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : 'Unable to update order status.');
     } finally {
@@ -69,7 +84,9 @@ export default function AdminOrdersPage() {
       <div className="mx-auto max-w-7xl">
         <div>
           <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Orders</h1>
+
           <p className="mt-3 text-gray-600">View customer orders and manage their status.</p>
         </div>
 
@@ -80,6 +97,33 @@ export default function AdminOrdersPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <AdminListToolbar
+            search={search}
+            onSearchChange={value => {
+              setSearch(value);
+              setCurrentPage(1);
+            }}
+            searchPlaceholder="Search by customer name or email..."
+          >
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</span>
+              <select
+                value={statusFilter}
+                onChange={event => {
+                  setStatusFilter(event.target.value as OrderStatus | '');
+                  setCurrentPage(1);
+                }}
+                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+              >
+                <option value="">All statuses</option>
+                {ORDER_STATUSES.map(status => (
+                  <option key={status} value={status}>
+                    {formatStatus(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </AdminListToolbar>
           <AdminListState
             status={fetchStatus}
             error={error}
@@ -125,7 +169,7 @@ export default function AdminOrdersPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {paginatedItems.map(order => {
+                  {orders.map(order => {
                     const itemCount = order.items.reduce((total, item) => total + item.quantity, 0);
 
                     return (
@@ -169,10 +213,10 @@ export default function AdminOrdersPage() {
               </table>
 
               <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={orders.length}
-                pageSize={pageSize}
+                currentPage={meta?.page ?? currentPage}
+                totalPages={meta?.totalPages ?? 1}
+                totalItems={meta?.total ?? 0}
+                pageSize={meta?.pageSize ?? ADMIN_PAGE_SIZE}
                 onPageChange={setCurrentPage}
               />
             </div>

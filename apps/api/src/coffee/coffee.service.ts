@@ -3,18 +3,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Coffee } from '@caffeinawa/types';
 import { Prisma, CoffeeCategory as PrismaCoffeeCategory } from '@prisma/client';
 
+import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { CoffeeEntity } from './entities/coffee.entity.js';
+
+import type { Coffee, PaginatedResponse } from '@caffeinawa/types';
+import type { AdminCoffeeQueryDto } from './dto/admin-coffee-query.dto.js';
 import type { CreateCoffeeDto } from './dto/create-coffee.dto.js';
 import type { UpdateCoffeeDto } from './dto/update-coffee.dto.js';
 
 @Injectable()
 export class CoffeeService {
   constructor(private readonly prisma: PrismaService) {}
-
   private toEntity(coffee: {
     id: string;
     name: string;
@@ -35,21 +37,47 @@ export class CoffeeService {
     });
   }
 
-  async findAll(): Promise<Coffee[]> {
+  async findAll(): Promise<Coffee[]>;
+  async findAll(query: AdminCoffeeQueryDto): Promise<PaginatedResponse<Coffee>>;
+  async findAll(query?: AdminCoffeeQueryDto) {
+    if (!query) {
+      const coffees = await this.prisma.coffee.findMany({
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return coffees.map((coffee) => this.toEntity(coffee));
+    }
+    const { page, pageSize, search, category, available } = query;
+    const where: Prisma.CoffeeWhereInput = {
+      ...(category && { category: category as PrismaCoffeeCategory }),
+      ...(available !== undefined && { available }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+    const total = await this.prisma.coffee.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const normalizedPage = Math.min(page, totalPages);
     const coffees = await this.prisma.coffee.findMany({
-      orderBy: {
-        createdAt: 'asc',
-      },
+      where,
+      orderBy: { createdAt: 'asc' },
+      skip: (normalizedPage - 1) * pageSize,
+      take: pageSize,
     });
 
-    return coffees.map((coffee) => this.toEntity(coffee));
+    return toPaginatedResponse(
+      coffees.map((coffee) => this.toEntity(coffee)),
+      normalizedPage,
+      pageSize,
+      total,
+    );
   }
 
   async findOne(id: string): Promise<Coffee> {
-    const coffee = await this.prisma.coffee.findUnique({
-      where: { id },
-    });
-
+    const coffee = await this.prisma.coffee.findUnique({ where: { id } });
     if (!coffee) {
       throw new NotFoundException(`Coffee "${id}" not found`);
     }
@@ -74,24 +102,17 @@ export class CoffeeService {
 
   async update(id: string, dto: UpdateCoffeeDto): Promise<Coffee> {
     await this.findOne(id);
-
     const coffee = await this.prisma.coffee.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.description !== undefined && {
-          description: dto.description,
-        }),
+        ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.category !== undefined && {
           category: dto.category as PrismaCoffeeCategory,
         }),
         ...(dto.price !== undefined && { price: dto.price }),
-        ...(dto.available !== undefined && {
-          available: dto.available,
-        }),
-        ...(dto.imageUrl !== undefined && {
-          imageUrl: dto.imageUrl,
-        }),
+        ...(dto.available !== undefined && { available: dto.available }),
+        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
       },
     });
 
@@ -100,11 +121,8 @@ export class CoffeeService {
 
   async remove(id: string): Promise<void> {
     await this.findOne(id);
-
     try {
-      await this.prisma.coffee.delete({
-        where: { id },
-      });
+      await this.prisma.coffee.delete({ where: { id } });
     } catch (error: unknown) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -114,7 +132,6 @@ export class CoffeeService {
           'Coffee cannot be deleted because it is referenced by an existing order',
         );
       }
-
       throw error;
     }
   }

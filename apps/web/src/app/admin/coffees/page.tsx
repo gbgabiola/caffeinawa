@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
+import { useDeferredValue, useEffect, useState } from 'react';
+
+import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
+import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { useAdminList } from '@/hooks/useAdminList';
-import { usePagination } from '@/hooks/usePagination';
+import { ADMIN_PAGE_SIZE } from '@/constants/admin';
+import { useAdminListQuery } from '@/hooks/useAdminListQuery';
 import { createAdminCoffee, deleteAdminCoffee, getAdminCoffees, updateAdminCoffee } from '@/lib/api/admin-coffees';
+
+import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
 
 const COFFEE_CATEGORIES: CoffeeCategory[] = ['espresso', 'latte', 'cappuccino', 'americano', 'cold_brew', 'non_coffee'];
 
@@ -29,32 +33,52 @@ const EMPTY_COFFEE_FORM: CoffeeFormState = {
   available: true,
   imageUrl: '',
 };
-
 const FORM_CONTROL_CLASS_NAME =
   'mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200';
 
 export default function AdminCoffeesPage() {
   const { accessToken } = useAuth();
-
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const [categoryFilter, setCategoryFilter] = useState<CoffeeCategory | ''>('');
+  const [availableFilter, setAvailableFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const {
-    data: coffees,
-    setData: setCoffees,
+    items: coffees,
+    meta,
     error,
     status: fetchStatus,
-  } = useAdminList(accessToken, getAdminCoffees, 'Unable to load coffees.');
-
+  } = useAdminListQuery({
+    accessToken,
+    queryKey: [
+      'admin',
+      'coffees',
+      {
+        page: currentPage,
+        pageSize: ADMIN_PAGE_SIZE,
+        search: deferredSearch,
+        category: categoryFilter,
+        available: availableFilter,
+      },
+    ],
+    queryFn: token =>
+      getAdminCoffees(token, {
+        page: currentPage,
+        pageSize: ADMIN_PAGE_SIZE,
+        search: deferredSearch,
+        ...(categoryFilter ? { category: categoryFilter } : {}),
+        ...(availableFilter ? { available: availableFilter === 'true' } : {}),
+      }),
+  });
   const [isCreating, setIsCreating] = useState(false);
   const [editingCoffeeId, setEditingCoffeeId] = useState<string | null>(null);
   const [form, setForm] = useState<CoffeeFormState>(EMPTY_COFFEE_FORM);
-
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
-
   const [coffeePendingDeletion, setCoffeePendingDeletion] = useState<Coffee | null>(null);
   const [deletingCoffeeId, setDeletingCoffeeId] = useState<string | null>(null);
-
-  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(coffees);
 
   useEffect(() => {
     if (!coffeePendingDeletion) {
@@ -149,7 +173,7 @@ export default function AdminCoffeesPage() {
 
     try {
       if (editingCoffeeId) {
-        const updatedCoffee = await updateAdminCoffee(accessToken, editingCoffeeId, {
+        await updateAdminCoffee(accessToken, editingCoffeeId, {
           name,
           description,
           category: form.category,
@@ -157,17 +181,13 @@ export default function AdminCoffeesPage() {
           available: form.available,
           imageUrl: imageUrl || undefined,
         });
-
-        setCoffees(currentCoffees =>
-          currentCoffees.map(coffee => (coffee.id === updatedCoffee.id ? updatedCoffee : coffee)),
-        );
-
+        await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
         setEditingCoffeeId(null);
         setForm(EMPTY_COFFEE_FORM);
         setSaveError(null);
         setSaveSuccess('Coffee updated successfully.');
       } else {
-        const createdCoffee = await createAdminCoffee(accessToken, {
+        await createAdminCoffee(accessToken, {
           name,
           description,
           category: form.category,
@@ -176,8 +196,7 @@ export default function AdminCoffeesPage() {
           ...(imageUrl ? { imageUrl } : {}),
         });
 
-        setCoffees(currentCoffees => [...currentCoffees, createdCoffee]);
-
+        await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
         setIsCreating(false);
         setEditingCoffeeId(null);
         setForm(EMPTY_COFFEE_FORM);
@@ -208,16 +227,12 @@ export default function AdminCoffeesPage() {
     setSaveError(null);
     setSaveError(null);
     setSaveSuccess(null);
-
     try {
       await deleteAdminCoffee(accessToken, coffee.id);
-
-      setCoffees(currentCoffees => currentCoffees.filter(item => item.id !== coffee.id));
-
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
       if (editingCoffeeId === coffee.id) {
         resetForm();
       }
-
       setSaveSuccess('Coffee deleted successfully.');
       setCoffeePendingDeletion(null);
     } catch (error) {
@@ -420,6 +435,48 @@ export default function AdminCoffeesPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <AdminListToolbar
+            search={search}
+            onSearchChange={value => {
+              setSearch(value);
+              setCurrentPage(1);
+            }}
+            searchPlaceholder="Search by coffee name or description..."
+          >
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Category</span>
+              <select
+                value={categoryFilter}
+                onChange={event => {
+                  setCategoryFilter(event.target.value as CoffeeCategory | '');
+                  setCurrentPage(1);
+                }}
+                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+              >
+                <option value="">All categories</option>
+                {COFFEE_CATEGORIES.map(category => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Availability</span>
+              <select
+                value={availableFilter}
+                onChange={event => {
+                  setAvailableFilter(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+              >
+                <option value="">All</option>
+                <option value="true">Available</option>
+                <option value="false">Unavailable</option>
+              </select>
+            </label>
+          </AdminListToolbar>
           <AdminListState
             status={fetchStatus}
             error={error}
@@ -440,7 +497,7 @@ export default function AdminCoffeesPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {paginatedItems.map(coffee => (
+                  {coffees.map(coffee => (
                     <tr key={coffee.id}>
                       <td className="px-6 py-4 align-top">
                         <div>
@@ -495,10 +552,10 @@ export default function AdminCoffeesPage() {
                 </tbody>
               </table>
               <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={coffees.length}
-                pageSize={pageSize}
+                currentPage={meta?.page ?? currentPage}
+                totalPages={meta?.totalPages ?? 1}
+                totalItems={meta?.total ?? 0}
+                pageSize={meta?.pageSize ?? ADMIN_PAGE_SIZE}
                 onPageChange={setCurrentPage}
               />
             </div>

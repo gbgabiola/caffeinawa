@@ -1,7 +1,15 @@
-import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AdminGuard } from '../auth/guards/admin.guard.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminPaymentQueryDto } from './dto/admin-payment-query.dto.js';
 import { PaymentService } from './payment.service.js';
 
 @Controller('admin/payments')
@@ -10,8 +18,8 @@ export class AdminPaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @Get()
-  findAll() {
-    return this.paymentService.findAll();
+  findAll(@Query() query: AdminPaymentQueryDto) {
+    return this.paymentService.findAll(query);
   }
 
   @Get(':id')

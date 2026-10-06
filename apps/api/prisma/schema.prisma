@@ -19,6 +19,9 @@ model Coffee {
 
   orderItems  OrderItem[]
   cartItems   CartItem[]
+
+  @@index([category, available])
+  @@index([createdAt])
 }
 
 model Customer {
@@ -30,6 +33,8 @@ model Customer {
 
   cart    Cart?
   orders  Order[]
+
+  @@index([name])
 }
 
 model Order {
@@ -42,6 +47,10 @@ model Order {
   customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items      OrderItem[]
   payments   Payment[]
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -92,6 +101,10 @@ model Payment {
   updatedAt         DateTime        @updatedAt
 
   order             Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
+  @@index([provider, status, createdAt])
+  @@index([createdAt])
 }
 
 enum CoffeeCategory {

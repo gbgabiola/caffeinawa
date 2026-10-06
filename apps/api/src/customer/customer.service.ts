@@ -4,10 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { Customer } from '@caffeinawa/types';
 
+import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { CustomerEntity } from './entities/customer.entity.js';
+
+import type { Customer } from '@caffeinawa/types';
+import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 import type { CreateCustomerDto } from './dto/create-customer.dto.js';
 import type { UpdateCustomerDto } from './dto/update-customer.dto.js';
 
@@ -26,18 +29,35 @@ export class CustomerService {
     ) {
       throw new ConflictException('Customer email already exists');
     }
-
     throw error;
   }
 
-  async findAll(): Promise<Customer[]> {
+  async findAll(query: AdminCustomerQueryDto) {
+    const { page, pageSize, search } = query;
+    const where: Prisma.CustomerWhereInput = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+    const total = await this.prisma.customer.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const normalizedPage = Math.min(page, totalPages);
     const customers = await this.prisma.customer.findMany({
-      orderBy: {
-        name: 'asc',
-      },
+      where,
+      orderBy: { name: 'asc' },
+      skip: (normalizedPage - 1) * pageSize,
+      take: pageSize,
     });
 
-    return customers.map((customer) => this.toEntity(customer));
+    return toPaginatedResponse(
+      customers.map((customer) => this.toEntity(customer)),
+      normalizedPage,
+      pageSize,
+      total,
+    );
   }
 
   async findOne(id: string): Promise<Customer> {
@@ -88,8 +108,6 @@ export class CustomerService {
   async remove(id: string): Promise<void> {
     await this.findOne(id);
 
-    await this.prisma.customer.delete({
-      where: { id },
-    });
+    await this.prisma.customer.delete({ where: { id } });
   }
 }

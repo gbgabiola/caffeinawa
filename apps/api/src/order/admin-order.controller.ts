@@ -1,7 +1,16 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AdminGuard } from '../auth/guards/admin.guard.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AdminOrderQueryDto } from './dto/admin-order-query.dto.js';
 import { UpdateOrderDto } from './dto/update-order.dto.js';
 import { OrderService } from './order.service.js';
 
@@ -11,8 +20,8 @@ export class AdminOrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Get()
-  findAll() {
-    return this.orderService.findAll();
+  findAll(@Query() query: AdminOrderQueryDto) {
+    return this.orderService.findAll(query);
   }
 
   @Get(':id')

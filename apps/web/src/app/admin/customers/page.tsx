@@ -1,13 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useDeferredValue, useState } from 'react';
+
+import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
+import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { useAdminList } from '@/hooks/useAdminList';
-import { usePagination } from '@/hooks/usePagination';
-import { getAdminCustomers, updateAdminCustomer, type AdminCustomer } from '@/lib/api/admin-customers';
+import { ADMIN_PAGE_SIZE } from '@/constants/admin';
+import { useAdminListQuery } from '@/hooks/useAdminListQuery';
+import { getAdminCustomers, updateAdminCustomer } from '@/lib/api/admin-customers';
+
+import type { AdminCustomer } from '@caffeinawa/types';
 
 interface CustomerFormState {
   name: string;
@@ -21,23 +26,26 @@ const EMPTY_CUSTOMER_FORM: CustomerFormState = {
 
 export default function AdminCustomersPage() {
   const { accessToken } = useAuth();
-
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const [currentPage, setCurrentPage] = useState(1);
   const {
-    data: customers,
-    setData: setCustomers,
+    items: customers,
+    meta,
     error,
     status: fetchStatus,
-  } = useAdminList(accessToken, getAdminCustomers, 'Unable to load customers.');
-
+  } = useAdminListQuery({
+    accessToken,
+    queryKey: ['admin', 'customers', { page: currentPage, pageSize: ADMIN_PAGE_SIZE, search: deferredSearch }],
+    queryFn: token =>
+      getAdminCustomers(token, { page: currentPage, pageSize: ADMIN_PAGE_SIZE, search: deferredSearch }),
+  });
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerFormState>(EMPTY_CUSTOMER_FORM);
-
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
-
-  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(customers);
-
   const editingCustomer = customers.find(customer => customer.id === editingCustomerId);
 
   const hasChanges = editingCustomer
@@ -68,7 +76,6 @@ export default function AdminCustomersPage() {
 
     const name = form.name.trim();
     const email = form.email.trim();
-
     if (!name || !email) {
       setSaveError('Name and email are required.');
       setSaveSuccess(null);
@@ -78,17 +85,12 @@ export default function AdminCustomersPage() {
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
-
     try {
-      const updatedCustomer = await updateAdminCustomer(accessToken, editingCustomerId, {
+      await updateAdminCustomer(accessToken, editingCustomerId, {
         name,
         email,
       });
-
-      setCustomers(currentCustomers =>
-        currentCustomers.map(customer => (customer.id === updatedCustomer.id ? updatedCustomer : customer)),
-      );
-
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'customers'] });
       setEditingCustomerId(null);
       setForm(EMPTY_CUSTOMER_FORM);
       setSaveError(null);
@@ -99,7 +101,6 @@ export default function AdminCustomersPage() {
       setIsSaving(false);
     }
   }
-
   return (
     <div className="px-6 py-8 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -124,6 +125,14 @@ export default function AdminCustomersPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <AdminListToolbar
+            search={search}
+            onSearchChange={value => {
+              setSearch(value);
+              setCurrentPage(1);
+            }}
+            searchPlaceholder="Search by name or email..."
+          />
           <AdminListState
             status={fetchStatus}
             error={error}
@@ -143,7 +152,7 @@ export default function AdminCustomersPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {paginatedItems.map(customer => {
+                  {customers.map(customer => {
                     const isEditing = editingCustomerId === customer.id;
 
                     return (
@@ -229,10 +238,10 @@ export default function AdminCustomersPage() {
                 </tbody>
               </table>
               <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={customers.length}
-                pageSize={pageSize}
+                currentPage={meta?.page ?? currentPage}
+                totalPages={meta?.totalPages ?? 1}
+                totalItems={meta?.total ?? 0}
+                pageSize={meta?.pageSize ?? ADMIN_PAGE_SIZE}
                 onPageChange={setCurrentPage}
               />
             </div>

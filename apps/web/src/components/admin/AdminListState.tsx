@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 
-import type { AdminListStatus } from '@/hooks/useAdminList';
+import type { AdminListStatus } from '@/hooks/useAdminListQuery';
 
 interface AdminListStateProps {
   status: AdminListStatus;
-  error: string | null;
+  error: Error | null;
   isEmpty: boolean;
   loadingMessage: string;
   emptyMessage: string;
@@ -31,7 +31,7 @@ export default function AdminListState({
     return (
       <div className="p-6">
         <p role="alert" className="text-sm font-medium text-red-600">
-          {error ?? 'Unable to load data.'}
+          {error?.message ?? 'Unable to load data.'}
         </p>
       </div>
     );

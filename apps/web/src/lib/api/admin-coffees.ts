@@ -1,6 +1,6 @@
-import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
+import { adminRequest, buildQueryString, type AdminListQuery } from './admin-client';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+import type { Coffee, CoffeeCategory, PaginatedResponse } from '@caffeinawa/types';
 
 export interface CreateAdminCoffeeInput {
   name: string;
@@ -13,42 +13,16 @@ export interface CreateAdminCoffeeInput {
 
 export type UpdateAdminCoffeeInput = Partial<CreateAdminCoffeeInput>;
 
-async function request<T>(accessToken: string, path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-
-    const message = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
-
-    throw new Error(message ?? `Request failed with status ${response.status}`);
-  }
-
-  const responseText = await response.text();
-
-  if (!responseText) {
-    return undefined as T;
-  }
-
-  return JSON.parse(responseText) as T;
+export interface AdminCoffeeQuery extends AdminListQuery {
+  category?: CoffeeCategory;
+  available?: boolean;
 }
-
-export function getAdminCoffees(accessToken: string): Promise<Coffee[]> {
-  return request<Coffee[]>(accessToken, '/coffees');
+export function getAdminCoffees(accessToken: string, query: AdminCoffeeQuery): Promise<PaginatedResponse<Coffee>> {
+  return adminRequest<PaginatedResponse<Coffee>>(accessToken, `/admin/coffees${buildQueryString(query)}`);
 }
 
 export function createAdminCoffee(accessToken: string, input: CreateAdminCoffeeInput): Promise<Coffee> {
-  return request<Coffee>(accessToken, '/coffees', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+  return adminRequest<Coffee>(accessToken, '/admin/coffees', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function updateAdminCoffee(
@@ -56,14 +30,12 @@ export function updateAdminCoffee(
   coffeeId: string,
   input: UpdateAdminCoffeeInput,
 ): Promise<Coffee> {
-  return request<Coffee>(accessToken, `/coffees/${coffeeId}`, {
+  return adminRequest<Coffee>(accessToken, `/admin/coffees/${encodeURIComponent(coffeeId)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
   });
 }
 
 export function deleteAdminCoffee(accessToken: string, coffeeId: string): Promise<void> {
-  return request<void>(accessToken, `/coffees/${coffeeId}`, {
-    method: 'DELETE',
-  });
+  return adminRequest<void>(accessToken, `/admin/coffees/${encodeURIComponent(coffeeId)}`, { method: 'DELETE' });
 }

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 import AdminNav from '@/components/admin/AdminNav';
 import { useAuth } from '@/components/auth/AuthProvider';
+import QueryProvider from '@/components/providers/QueryProvider';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -13,22 +14,15 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const { customer, isLoading } = useAuth();
-
   const isAdmin = customer?.role === 'ADMIN';
 
   useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
+    if (isLoading) return;
     if (!customer) {
       router.replace('/login');
       return;
     }
-
-    if (!isAdmin) {
-      router.replace('/');
-    }
+    if (!isAdmin) router.replace('/');
   }, [customer, isAdmin, isLoading, router]);
 
   if (isLoading || !customer || !isAdmin) {
@@ -40,10 +34,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-gray-50 lg:flex-row">
-      <AdminNav />
-
-      <section className="min-w-0 flex-1">{children}</section>
-    </div>
+    <QueryProvider>
+      <div className="flex flex-1 flex-col bg-gray-50 lg:flex-row">
+        <AdminNav />
+        <section className="min-w-0 flex-1">{children}</section>
+      </div>
+    </QueryProvider>
   );
 }

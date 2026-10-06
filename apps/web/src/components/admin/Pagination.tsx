@@ -7,10 +7,7 @@ interface PaginationProps {
 }
 
 export default function Pagination({ currentPage, totalPages, totalItems, pageSize, onPageChange }: PaginationProps) {
-  if (totalItems <= pageSize) {
-    return null;
-  }
-
+  if (totalItems <= pageSize) return null;
   const startItem = (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
 

@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 
-import type { PaymentProvider, PaymentStatus } from '@caffeinawa/types';
+import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
+import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { useAdminList } from '@/hooks/useAdminList';
-import { usePagination } from '@/hooks/usePagination';
+import { ADMIN_PAGE_SIZE } from '@/constants/admin';
+import { useAdminListQuery } from '@/hooks/useAdminListQuery';
 import { getAdminPayments, markAdminPaymentAsPaid } from '@/lib/api/admin-payments';
+
+import type { PaymentProvider, PaymentStatus } from '@caffeinawa/types';
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -47,19 +50,41 @@ function statusClasses(status: PaymentStatus): string {
 
 export default function AdminPaymentsPage() {
   const { accessToken } = useAuth();
-
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const [providerFilter, setProviderFilter] = useState<PaymentProvider | ''>('');
+  const [statusFilter, setStatusFilter] = useState<PaymentStatus | ''>('');
+  const [currentPage, setCurrentPage] = useState(1);
   const {
-    data: payments,
-    setData: setPayments,
+    items: payments,
+    meta,
     error,
     status: fetchStatus,
-  } = useAdminList(accessToken, getAdminPayments, 'Unable to load payments.');
-
+  } = useAdminListQuery({
+    accessToken,
+    queryKey: [
+      'admin',
+      'payments',
+      {
+        page: currentPage,
+        pageSize: ADMIN_PAGE_SIZE,
+        search: deferredSearch,
+        provider: providerFilter,
+        status: statusFilter,
+      },
+    ],
+    queryFn: token =>
+      getAdminPayments(token, {
+        page: currentPage,
+        pageSize: ADMIN_PAGE_SIZE,
+        search: deferredSearch,
+        ...(providerFilter ? { provider: providerFilter } : {}),
+        ...(statusFilter ? { status: statusFilter } : {}),
+      }),
+  });
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
-
-  const { currentPage, totalPages, pageSize, paginatedItems, setCurrentPage } = usePagination(payments);
-
   async function handleMarkAsPaid(paymentId: string) {
     if (!accessToken) {
       return;
@@ -69,24 +94,22 @@ export default function AdminPaymentsPage() {
     setUpdateError(null);
 
     try {
-      const updatedPayment = await markAdminPaymentAsPaid(accessToken, paymentId);
-
-      setPayments(currentPayments =>
-        currentPayments.map(payment => (payment.id === updatedPayment.id ? updatedPayment : payment)),
-      );
+      await markAdminPaymentAsPaid(accessToken, paymentId);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'payments'] });
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : 'Unable to mark payment as paid.');
     } finally {
       setUpdatingPaymentId(null);
     }
   }
-
   return (
     <main className="p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div>
           <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Payments</h1>
+
           <p className="mt-3 text-gray-600">Monitor payment status and confirm cash payments.</p>
         </div>
 
@@ -97,6 +120,48 @@ export default function AdminPaymentsPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <AdminListToolbar
+            search={search}
+            onSearchChange={value => {
+              setSearch(value);
+              setCurrentPage(1);
+            }}
+            searchPlaceholder="Search by customer or order..."
+          >
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Provider</span>
+              <select
+                value={providerFilter}
+                onChange={event => {
+                  setProviderFilter(event.target.value as PaymentProvider | '');
+                  setCurrentPage(1);
+                }}
+                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+              >
+                <option value="">All providers</option>
+                <option value="cash">Cash</option>
+                <option value="paymongo">PayMongo</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</span>
+              <select
+                value={statusFilter}
+                onChange={event => {
+                  setStatusFilter(event.target.value as PaymentStatus | '');
+                  setCurrentPage(1);
+                }}
+                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+              >
+                <option value="">All statuses</option>
+                {(['pending', 'paid', 'failed', 'expired', 'cancelled'] as PaymentStatus[]).map(status => (
+                  <option key={status} value={status}>
+                    {formatStatus(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </AdminListToolbar>
           <AdminListState
             status={fetchStatus}
             error={error}
@@ -154,7 +219,7 @@ export default function AdminPaymentsPage() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {paginatedItems.map(payment => {
+                  {payments.map(payment => {
                     const itemCount = payment.order.items.reduce((total, item) => total + item.quantity, 0);
 
                     const itemSummary = payment.order.items
@@ -219,10 +284,10 @@ export default function AdminPaymentsPage() {
               </table>
 
               <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={payments.length}
-                pageSize={pageSize}
+                currentPage={meta?.page ?? currentPage}
+                totalPages={meta?.totalPages ?? 1}
+                totalItems={meta?.total ?? 0}
+                pageSize={meta?.pageSize ?? ADMIN_PAGE_SIZE}
                 onPageChange={setCurrentPage}
               />
             </div>

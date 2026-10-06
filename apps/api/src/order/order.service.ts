@@ -4,27 +4,23 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, OrderStatus as PrismaOrderStatus } from '@prisma/client';
-import type { AdminOrder, Order, OrderStatus } from '@caffeinawa/types';
 
+import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { OrderEntity } from './entities/order.entity.js';
+
+import type { AdminOrder, Order, OrderStatus } from '@caffeinawa/types';
+import type { AdminOrderQueryDto } from './dto/admin-order-query.dto.js';
 import type {
   CreateOrderDto,
   CreateOrderItemDto,
 } from './dto/create-order.dto.js';
 import type { UpdateOrderDto } from './dto/update-order.dto.js';
-import { OrderEntity } from './entities/order.entity.js';
 
 const ADMIN_ORDER_INCLUDE = {
   items: true,
-  customer: {
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  },
+  customer: { select: { id: true, name: true, email: true } },
 } satisfies Prisma.OrderInclude;
-
 type AdminOrderRecord = Prisma.OrderGetPayload<{
   include: typeof ADMIN_ORDER_INCLUDE;
 }>;
@@ -32,9 +28,12 @@ type AdminOrderRecord = Prisma.OrderGetPayload<{
 @Injectable()
 export class OrderService {
   constructor(private readonly prisma: PrismaService) {}
-
   private toEntity(
-    order: Prisma.OrderGetPayload<{ include: { items: true } }>,
+    order: Prisma.OrderGetPayload<{
+      include: {
+        items: true;
+      };
+    }>,
   ): Order {
     return new OrderEntity({
       id: order.id,
@@ -136,9 +135,7 @@ export class OrderService {
         customerId,
         status: PrismaOrderStatus.PENDING,
         total: new Prisma.Decimal(total),
-        items: {
-          create: items,
-        },
+        items: { create: items },
       },
       include: { items: true },
     });
@@ -146,13 +143,36 @@ export class OrderService {
     return this.toEntity(order);
   }
 
-  async findAll(): Promise<AdminOrder[]> {
+  async findAll(query: AdminOrderQueryDto) {
+    const { page, pageSize, search, status } = query;
+    const where: Prisma.OrderWhereInput = {
+      ...(status && { status: status.toUpperCase() as PrismaOrderStatus }),
+      ...(search && {
+        customer: {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      }),
+    };
+    const total = await this.prisma.order.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const normalizedPage = Math.min(page, totalPages);
     const orders = await this.prisma.order.findMany({
+      where,
       include: ADMIN_ORDER_INCLUDE,
       orderBy: { createdAt: 'desc' },
+      skip: (normalizedPage - 1) * pageSize,
+      take: pageSize,
     });
 
-    return orders.map((order) => this.toAdminEntity(order));
+    return toPaginatedResponse(
+      orders.map((order) => this.toAdminEntity(order)),
+      normalizedPage,
+      pageSize,
+      total,
+    );
   }
 
   async findOne(id: string): Promise<AdminOrder> {
@@ -160,7 +180,6 @@ export class OrderService {
       where: { id },
       include: ADMIN_ORDER_INCLUDE,
     });
-
     if (!order) {
       throw new NotFoundException(`Order "${id}" not found`);
     }
@@ -170,12 +189,9 @@ export class OrderService {
 
   async update(id: string, dto: UpdateOrderDto): Promise<AdminOrder> {
     await this.findOne(id);
-
     const order = await this.prisma.order.update({
       where: { id },
-      data: {
-        status: dto.status.toUpperCase() as PrismaOrderStatus,
-      },
+      data: { status: dto.status.toUpperCase() as PrismaOrderStatus },
       include: ADMIN_ORDER_INCLUDE,
     });
 

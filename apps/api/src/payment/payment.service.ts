@@ -9,31 +9,20 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client';
-import type { AdminPayment } from '@caffeinawa/types';
 
+import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentEntity } from './entities/payment.entity.js';
 import { PayMongoService } from './paymongo.service.js';
 
+import type { AdminPayment } from '@caffeinawa/types';
+import type { AdminPaymentQueryDto } from './dto/admin-payment-query.dto.js';
+
 const ADMIN_PAYMENT_INCLUDE = {
   order: {
     include: {
-      customer: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      items: {
-        include: {
-          coffee: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      },
+      customer: { select: { id: true, name: true, email: true } },
+      items: { include: { coffee: { select: { name: true } } } },
     },
   },
 } satisfies Prisma.PaymentInclude;
@@ -49,13 +38,44 @@ export class PaymentService {
     private readonly payMongoService: PayMongoService,
   ) {}
 
-  async findAll(): Promise<AdminPayment[]> {
+  async findAll(query: AdminPaymentQueryDto) {
+    const { page, pageSize, search, provider, status } = query;
+    const where: Prisma.PaymentWhereInput = {
+      ...(provider && { provider: provider.toUpperCase() as PaymentProvider }),
+      ...(status && { status: status.toUpperCase() as PaymentStatus }),
+      ...(search && {
+        OR: [
+          { orderId: { contains: search, mode: 'insensitive' } },
+          {
+            order: {
+              customer: { name: { contains: search, mode: 'insensitive' } },
+            },
+          },
+          {
+            order: {
+              customer: { email: { contains: search, mode: 'insensitive' } },
+            },
+          },
+        ],
+      }),
+    };
+    const total = await this.prisma.payment.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const normalizedPage = Math.min(page, totalPages);
     const payments = await this.prisma.payment.findMany({
+      where,
       include: ADMIN_PAYMENT_INCLUDE,
       orderBy: { createdAt: 'desc' },
+      skip: (normalizedPage - 1) * pageSize,
+      take: pageSize,
     });
 
-    return payments.map((payment) => this.toAdminEntity(payment));
+    return toPaginatedResponse(
+      payments.map((payment) => this.toAdminEntity(payment)),
+      normalizedPage,
+      pageSize,
+      total,
+    );
   }
 
   async findOne(id: string): Promise<AdminPayment> {
@@ -91,9 +111,7 @@ export class PaymentService {
 
   async markCashPaymentAsPaid(id: string): Promise<AdminPayment> {
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findUnique({
-        where: { id },
-      });
+      const payment = await tx.payment.findUnique({ where: { id } });
 
       if (!payment) {
         throw new NotFoundException(`Payment "${id}" not found`);
@@ -126,10 +144,7 @@ export class PaymentService {
 
       const updatedPayment = await tx.payment.update({
         where: { id },
-        data: {
-          status: PaymentStatus.PAID,
-          paidAt: new Date(),
-        },
+        data: { status: PaymentStatus.PAID, paidAt: new Date() },
       });
 
       await tx.order.update({
@@ -156,14 +171,7 @@ export class PaymentService {
   }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            coffee: true,
-          },
-        },
-      },
+      include: { customer: true, items: { include: { coffee: true } } },
     });
 
     if (!order) {
@@ -230,7 +238,9 @@ export class PaymentService {
           type: string;
           attributes: {
             reference_number?: string;
-            payment_intent?: { id?: string };
+            payment_intent?: {
+              id?: string;
+            };
           };
         };
       };
