@@ -45,15 +45,38 @@ export class PaymentService {
       ...(status && { status: status.toUpperCase() as PaymentStatus }),
       ...(search && {
         OR: [
-          { orderId: { contains: search, mode: 'insensitive' } },
           {
             order: {
-              customer: { name: { contains: search, mode: 'insensitive' } },
+              customer: {
+                name: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
             },
           },
           {
             order: {
-              customer: { email: { contains: search, mode: 'insensitive' } },
+              customer: {
+                email: {
+                  contains: search,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+          {
+            order: {
+              items: {
+                some: {
+                  coffee: {
+                    name: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
             },
           },
         ],
