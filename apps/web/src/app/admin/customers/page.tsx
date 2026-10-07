@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useState } from 'react';
+import { useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,6 +10,7 @@ import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
+import { useAdminListState } from '@/hooks/useAdminListState';
 import { getAdminCustomers, updateAdminCustomer } from '@/lib/api/admin-customers';
 
 import type { AdminCustomer } from '@caffeinawa/types';
@@ -27,9 +28,7 @@ const EMPTY_CUSTOMER_FORM: CustomerFormState = {
 export default function AdminCustomersPage() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const deferredSearch = useDeferredValue(search);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { search, deferredSearch, setSearch, currentPage, setCurrentPage } = useAdminListState();
   const {
     items: customers,
     meta,
@@ -127,10 +126,7 @@ export default function AdminCustomersPage() {
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <AdminListToolbar
             search={search}
-            onSearchChange={value => {
-              setSearch(value);
-              setCurrentPage(1);
-            }}
+            onSearchChange={setSearch}
             searchPlaceholder="Search by name or email..."
           />
           <AdminListState

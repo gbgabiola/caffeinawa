@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,6 +10,7 @@ import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
+import { useAdminListState } from '@/hooks/useAdminListState';
 import { createAdminCoffee, deleteAdminCoffee, getAdminCoffees, updateAdminCoffee } from '@/lib/api/admin-coffees';
 
 import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
@@ -39,11 +40,9 @@ const FORM_CONTROL_CLASS_NAME =
 export default function AdminCoffeesPage() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const deferredSearch = useDeferredValue(search);
+  const { search, deferredSearch, setSearch, currentPage, setCurrentPage, resetPage } = useAdminListState();
   const [categoryFilter, setCategoryFilter] = useState<CoffeeCategory | ''>('');
   const [availableFilter, setAvailableFilter] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const {
     items: coffees,
     meta,
@@ -224,7 +223,6 @@ export default function AdminCoffeesPage() {
     const coffee = coffeePendingDeletion;
 
     setDeletingCoffeeId(coffee.id);
-    setSaveError(null);
     setSaveError(null);
     setSaveSuccess(null);
     try {
@@ -437,10 +435,7 @@ export default function AdminCoffeesPage() {
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <AdminListToolbar
             search={search}
-            onSearchChange={value => {
-              setSearch(value);
-              setCurrentPage(1);
-            }}
+            onSearchChange={setSearch}
             searchPlaceholder="Search by coffee name or description..."
           >
             <label className="block">
@@ -449,7 +444,7 @@ export default function AdminCoffeesPage() {
                 value={categoryFilter}
                 onChange={event => {
                   setCategoryFilter(event.target.value as CoffeeCategory | '');
-                  setCurrentPage(1);
+                  resetPage();
                 }}
                 className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
               >
@@ -467,7 +462,7 @@ export default function AdminCoffeesPage() {
                 value={availableFilter}
                 onChange={event => {
                   setAvailableFilter(event.target.value);
-                  setCurrentPage(1);
+                  resetPage();
                 }}
                 className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
               >

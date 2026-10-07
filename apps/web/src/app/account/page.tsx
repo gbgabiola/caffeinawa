@@ -167,7 +167,10 @@ export default function AccountPage() {
         <AccountForm key={customer.id} customer={customer} updateCustomer={updateCustomer} />
 
         <div className="mt-8 flex flex-col gap-4 border-t border-black/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/menu" className="text-sm font-medium underline underline-offset-4">
+          <Link
+            href="/menu"
+            className="text-sm font-medium underline underline-offset-4 transition-opacity hover:opacity-80"
+          >
             Browse the menu
           </Link>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useState } from 'react';
+import { useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,6 +10,7 @@ import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
+import { useAdminListState } from '@/hooks/useAdminListState';
 import { getAdminOrders, updateAdminOrder } from '@/lib/api/admin-orders';
 
 import type { OrderStatus } from '@caffeinawa/types';
@@ -37,10 +38,8 @@ function formatStatus(status: OrderStatus): string {
 export default function AdminOrdersPage() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const deferredSearch = useDeferredValue(search);
+  const { search, deferredSearch, setSearch, currentPage, setCurrentPage, resetPage } = useAdminListState();
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
-  const [currentPage, setCurrentPage] = useState(1);
   const {
     items: orders,
     meta,
@@ -99,10 +98,7 @@ export default function AdminOrdersPage() {
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <AdminListToolbar
             search={search}
-            onSearchChange={value => {
-              setSearch(value);
-              setCurrentPage(1);
-            }}
+            onSearchChange={setSearch}
             searchPlaceholder="Search by customer name or email..."
           >
             <label className="block">
@@ -111,7 +107,7 @@ export default function AdminOrdersPage() {
                 value={statusFilter}
                 onChange={event => {
                   setStatusFilter(event.target.value as OrderStatus | '');
-                  setCurrentPage(1);
+                  resetPage();
                 }}
                 className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
               >

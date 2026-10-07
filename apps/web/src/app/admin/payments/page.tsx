@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useState } from 'react';
+import { useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,6 +10,7 @@ import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
+import { useAdminListState } from '@/hooks/useAdminListState';
 import { getAdminPayments, markAdminPaymentAsPaid } from '@/lib/api/admin-payments';
 
 import type { PaymentProvider, PaymentStatus } from '@caffeinawa/types';
@@ -51,11 +52,9 @@ function statusClasses(status: PaymentStatus): string {
 export default function AdminPaymentsPage() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const deferredSearch = useDeferredValue(search);
+  const { search, deferredSearch, setSearch, currentPage, setCurrentPage, resetPage } = useAdminListState();
   const [providerFilter, setProviderFilter] = useState<PaymentProvider | ''>('');
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | ''>('');
-  const [currentPage, setCurrentPage] = useState(1);
   const {
     items: payments,
     meta,
@@ -122,10 +121,7 @@ export default function AdminPaymentsPage() {
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <AdminListToolbar
             search={search}
-            onSearchChange={value => {
-              setSearch(value);
-              setCurrentPage(1);
-            }}
+            onSearchChange={setSearch}
             searchPlaceholder="Search by customer or order..."
           >
             <label className="block">
@@ -134,7 +130,7 @@ export default function AdminPaymentsPage() {
                 value={providerFilter}
                 onChange={event => {
                   setProviderFilter(event.target.value as PaymentProvider | '');
-                  setCurrentPage(1);
+                  resetPage();
                 }}
                 className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
               >
@@ -149,7 +145,7 @@ export default function AdminPaymentsPage() {
                 value={statusFilter}
                 onChange={event => {
                   setStatusFilter(event.target.value as PaymentStatus | '');
-                  setCurrentPage(1);
+                  resetPage();
                 }}
                 className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
               >
