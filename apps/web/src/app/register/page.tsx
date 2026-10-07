@@ -84,7 +84,7 @@ export default function RegisterPage() {
               maxLength={100}
               value={name}
               onChange={event => setName(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
             />
           </div>
 
@@ -102,7 +102,7 @@ export default function RegisterPage() {
               maxLength={255}
               value={email}
               onChange={event => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
             />
           </div>
 
@@ -121,7 +121,7 @@ export default function RegisterPage() {
               maxLength={128}
               value={password}
               onChange={event => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
             />
 
             <p className="mt-2 text-xs text-gray-500">Password must be between 8 and 128 characters.</p>
@@ -142,7 +142,7 @@ export default function RegisterPage() {
               maxLength={128}
               value={confirmPassword}
               onChange={event => setConfirmPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
             />
           </div>
 
@@ -163,7 +163,10 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-gray-600">
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-black underline underline-offset-4">
+          <Link
+            href="/login"
+            className="font-medium text-white underline underline-offset-4 transition-opacity hover:opacity-80"
+          >
             Sign in
           </Link>
         </p>

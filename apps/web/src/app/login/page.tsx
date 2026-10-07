@@ -70,7 +70,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={event => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
             />
           </div>
 
@@ -87,7 +87,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={event => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-black/15 px-4 py-3 outline-none transition focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
             />
           </div>
 
@@ -108,7 +108,10 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-gray-600">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-medium text-black underline underline-offset-4">
+          <Link
+            href="/register"
+            className="font-medium text-white underline underline-offset-4 transition-opacity hover:opacity-80"
+          >
             Create one
           </Link>
         </p>
