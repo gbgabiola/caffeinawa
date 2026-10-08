@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -8,6 +8,7 @@ import AdminListState from '@/components/admin/AdminListState';
 import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
+import Dialog from '@/components/ui/Dialog';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
 import { useAdminListState } from '@/hooks/useAdminListState';
@@ -78,24 +79,6 @@ export default function AdminCoffeesPage() {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [coffeePendingDeletion, setCoffeePendingDeletion] = useState<Coffee | null>(null);
   const [deletingCoffeeId, setDeletingCoffeeId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!coffeePendingDeletion) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !deletingCoffeeId) {
-        setCoffeePendingDeletion(null);
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [coffeePendingDeletion, deletingCoffeeId]);
 
   const editingCoffee = coffees.find(coffee => coffee.id === editingCoffeeId);
 
@@ -558,56 +541,37 @@ export default function AdminCoffeesPage() {
         </div>
       </div>
       {coffeePendingDeletion && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          role="presentation"
-          onClick={() => {
-            if (!deletingCoffeeId) {
-              setCoffeePendingDeletion(null);
-            }
-          }}
+        <Dialog
+          open={Boolean(coffeePendingDeletion)}
+          onClose={() => setCoffeePendingDeletion(null)}
+          title="Delete coffee?"
+          description={
+            coffeePendingDeletion
+              ? `Are you sure you want to delete ${coffeePendingDeletion.name}? This action cannot be undone.`
+              : undefined
+          }
+          closeDisabled={Boolean(deletingCoffeeId)}
         >
-          <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-coffee-title"
-            aria-describedby="delete-coffee-description"
-            onClick={event => event.stopPropagation()}
-          >
-            <div>
-              <h2 id="delete-coffee-title" className="text-lg font-semibold text-gray-900">
-                Delete coffee?
-              </h2>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setCoffeePendingDeletion(null)}
+              disabled={Boolean(deletingCoffeeId)}
+              className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel
+            </button>
 
-              <p id="delete-coffee-description" className="mt-2 text-sm leading-6 text-gray-600">
-                Are you sure you want to delete{' '}
-                <span className="font-medium text-gray-900">{coffeePendingDeletion.name}</span>? This action cannot be
-                undone.
-              </p>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setCoffeePendingDeletion(null)}
-                disabled={Boolean(deletingCoffeeId)}
-                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmDelete}
-                disabled={Boolean(deletingCoffeeId)}
-                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deletingCoffeeId ? 'Deleting...' : 'Delete Coffee'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={Boolean(deletingCoffeeId)}
+              className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deletingCoffeeId ? 'Deleting...' : 'Delete Coffee'}
+            </button>
           </div>
-        </div>
+        </Dialog>
       )}
     </div>
   );
