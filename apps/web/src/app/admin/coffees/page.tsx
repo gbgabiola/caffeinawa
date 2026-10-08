@@ -9,6 +9,7 @@ import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Dialog from '@/components/ui/Dialog';
+import FormField from '@/components/ui/FormField';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
 import { useAdminListState } from '@/hooks/useAdminListState';
@@ -273,11 +274,7 @@ export default function AdminCoffeesPage() {
             </div>
 
             <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <div>
-                <label htmlFor="coffee-name" className="block text-sm font-medium text-gray-700">
-                  Name
-                </label>
-
+              <FormField htmlFor="coffee-name" label="Name">
                 <input
                   id="coffee-name"
                   type="text"
@@ -290,13 +287,9 @@ export default function AdminCoffeesPage() {
                   }
                   className={FORM_CONTROL_CLASS_NAME}
                 />
-              </div>
+              </FormField>
 
-              <div>
-                <label htmlFor="coffee-category" className="block text-sm font-medium text-gray-700">
-                  Category
-                </label>
-
+              <FormField htmlFor="coffee-category" label="Category">
                 <select
                   id="coffee-category"
                   value={form.category}
@@ -314,13 +307,9 @@ export default function AdminCoffeesPage() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </FormField>
 
-              <div>
-                <label htmlFor="coffee-price" className="block text-sm font-medium text-gray-700">
-                  Price
-                </label>
-
+              <FormField htmlFor="coffee-price" label="Price">
                 <input
                   id="coffee-price"
                   type="number"
@@ -335,13 +324,9 @@ export default function AdminCoffeesPage() {
                   }
                   className={FORM_CONTROL_CLASS_NAME}
                 />
-              </div>
+              </FormField>
 
-              <div>
-                <label htmlFor="coffee-image-url" className="block text-sm font-medium text-gray-700">
-                  Image URL
-                </label>
-
+              <FormField htmlFor="coffee-image-url" label="Image URL">
                 <input
                   id="coffee-image-url"
                   type="url"
@@ -355,25 +340,23 @@ export default function AdminCoffeesPage() {
                   placeholder="https://..."
                   className={FORM_CONTROL_CLASS_NAME}
                 />
-              </div>
+              </FormField>
 
               <div className="md:col-span-2">
-                <label htmlFor="coffee-description" className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-
-                <textarea
-                  id="coffee-description"
-                  rows={4}
-                  value={form.description}
-                  onChange={event =>
-                    setForm(current => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  className={FORM_CONTROL_CLASS_NAME}
-                />
+                <FormField htmlFor="coffee-description" label="Description">
+                  <textarea
+                    id="coffee-description"
+                    rows={4}
+                    value={form.description}
+                    onChange={event =>
+                      setForm(current => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    className={FORM_CONTROL_CLASS_NAME}
+                  />
+                </FormField>
               </div>
 
               <label className="flex items-center gap-3 md:col-span-2">
