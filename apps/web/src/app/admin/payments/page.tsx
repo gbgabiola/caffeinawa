@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
 import AdminListToolbar from '@/components/admin/AdminListToolbar';
+import AdminTable, { AdminTableBody, AdminTableHead } from '@/components/admin/AdminTable';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
@@ -166,8 +167,8 @@ export default function AdminPaymentsPage() {
             emptyMessage="No payments found."
           >
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <AdminTable>
+                <AdminTableHead>
                   <tr>
                     <th
                       scope="col"
@@ -212,9 +213,9 @@ export default function AdminPaymentsPage() {
                       Action
                     </th>
                   </tr>
-                </thead>
+                </AdminTableHead>
 
-                <tbody className="divide-y divide-gray-200">
+                <AdminTableBody>
                   {payments.map(payment => {
                     const itemCount = payment.order.items.reduce((total, item) => total + item.quantity, 0);
 
@@ -276,8 +277,8 @@ export default function AdminPaymentsPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
+                </AdminTableBody>
+              </AdminTable>
 
               <Pagination
                 currentPage={meta?.page ?? currentPage}

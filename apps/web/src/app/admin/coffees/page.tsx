@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
 import AdminListToolbar from '@/components/admin/AdminListToolbar';
+import AdminTable, { AdminTableBody, AdminTableHead } from '@/components/admin/AdminTable';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Dialog from '@/components/ui/Dialog';
@@ -446,8 +447,8 @@ export default function AdminCoffeesPage() {
             emptyMessage="No coffees found."
           >
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50">
+              <AdminTable>
+                <AdminTableHead>
                   <tr>
                     <th className="px-6 py-3 font-medium text-gray-600">Name</th>
                     <th className="px-6 py-3 font-medium text-gray-600">Category</th>
@@ -455,9 +456,9 @@ export default function AdminCoffeesPage() {
                     <th className="px-6 py-3 font-medium text-gray-600">Availability</th>
                     <th className="px-6 py-3 font-medium text-gray-600">Actions</th>
                   </tr>
-                </thead>
+                </AdminTableHead>
 
-                <tbody className="divide-y divide-gray-100">
+                <AdminTableBody>
                   {coffees.map(coffee => (
                     <tr key={coffee.id}>
                       <td className="px-6 py-4 align-top">
@@ -510,8 +511,8 @@ export default function AdminCoffeesPage() {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+                </AdminTableBody>
+              </AdminTable>
               <Pagination
                 currentPage={meta?.page ?? currentPage}
                 totalPages={meta?.totalPages ?? 1}

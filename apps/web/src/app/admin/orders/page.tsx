@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
 import AdminListToolbar from '@/components/admin/AdminListToolbar';
+import AdminTable, { AdminTableBody, AdminTableHead } from '@/components/admin/AdminTable';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
@@ -128,8 +129,8 @@ export default function AdminOrdersPage() {
             emptyMessage="No orders found."
           >
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <AdminTable>
+                <AdminTableHead>
                   <tr>
                     <th
                       scope="col"
@@ -162,9 +163,9 @@ export default function AdminOrdersPage() {
                       Created
                     </th>
                   </tr>
-                </thead>
+                </AdminTableHead>
 
-                <tbody className="divide-y divide-gray-200">
+                <AdminTableBody>
                   {orders.map(order => {
                     const itemCount = order.items.reduce((total, item) => total + item.quantity, 0);
 
@@ -205,8 +206,8 @@ export default function AdminOrdersPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
+                </AdminTableBody>
+              </AdminTable>
 
               <Pagination
                 currentPage={meta?.page ?? currentPage}

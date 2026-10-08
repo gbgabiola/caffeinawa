@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import AdminListState from '@/components/admin/AdminListState';
 import AdminListToolbar from '@/components/admin/AdminListToolbar';
+import AdminTable, { AdminTableBody, AdminTableHead } from '@/components/admin/AdminTable';
 import Pagination from '@/components/admin/Pagination';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
@@ -124,11 +125,7 @@ export default function AdminCustomersPage() {
         )}
 
         <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <AdminListToolbar
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search by name or email..."
-          />
+          <AdminListToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search by name or email..." />
           <AdminListState
             status={fetchStatus}
             error={error}
@@ -137,17 +134,17 @@ export default function AdminCustomersPage() {
             emptyMessage="No customers found."
           >
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-gray-200 bg-gray-50">
+              <AdminTable>
+                <AdminTableHead>
                   <tr>
                     <th className="px-6 py-3 font-medium text-gray-600">Name</th>
                     <th className="px-6 py-3 font-medium text-gray-600">Email</th>
                     <th className="px-6 py-3 font-medium text-gray-600">Role</th>
                     <th className="px-6 py-3 font-medium text-gray-600">Actions</th>
                   </tr>
-                </thead>
+                </AdminTableHead>
 
-                <tbody className="divide-y divide-gray-100">
+                <AdminTableBody>
                   {customers.map(customer => {
                     const isEditing = editingCustomerId === customer.id;
 
@@ -231,8 +228,8 @@ export default function AdminCustomersPage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
+                </AdminTableBody>
+              </AdminTable>
               <Pagination
                 currentPage={meta?.page ?? currentPage}
                 totalPages={meta?.totalPages ?? 1}
