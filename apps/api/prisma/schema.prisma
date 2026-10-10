@@ -62,6 +62,9 @@ model OrderItem {
 
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   coffee    Coffee   @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([coffeeId])
 }
 
 model Cart {
