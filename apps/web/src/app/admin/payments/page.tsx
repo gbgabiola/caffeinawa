@@ -102,6 +102,8 @@ export default function AdminPaymentsPage() {
       setUpdatingPaymentId(null);
     }
   }
+
+  const hasActiveFilters = Boolean(search.trim() || providerFilter || statusFilter);
   return (
     <main className="p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
@@ -123,7 +125,7 @@ export default function AdminPaymentsPage() {
           <AdminListToolbar
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search by customer or order..."
+            searchPlaceholder="Search by customer or coffee..."
           >
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Provider</span>
@@ -158,6 +160,21 @@ export default function AdminPaymentsPage() {
                 ))}
               </select>
             </label>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setProviderFilter('');
+                  setStatusFilter('');
+                  resetPage();
+                }}
+                className="self-end rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                Clear filters
+              </button>
+            )}
           </AdminListToolbar>
           <AdminListState
             status={fetchStatus}
