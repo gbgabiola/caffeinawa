@@ -1,12 +1,19 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import type { Request } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PaymentService } from './payment.service.js';
 import { PayMongoWebhookController } from './paymongo-webhook.controller.js';
 
 const webhookSecret = 'unit-test-webhook-secret';
-const timestamp = '1720000000';
+
+const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
+const originalMode = process.env.PAYMONGO_MODE;
+
+function currentTimestamp(): string {
+  return Math.floor(Date.now() / 1000).toString();
+}
 
 function createEvent(eventType = 'checkout_session.payment.paid') {
   return {
@@ -21,7 +28,9 @@ function createEvent(eventType = 'checkout_session.payment.paid') {
           type: 'checkout_session' as const,
           attributes: {
             reference_number: 'order_test_123',
-            payment_intent: { id: 'pi_test_123' },
+            payment_intent: {
+              id: 'pi_test_123',
+            },
           },
         },
       },
@@ -29,39 +38,68 @@ function createEvent(eventType = 'checkout_session.payment.paid') {
   };
 }
 
-function signedRequest(event: ReturnType<typeof createEvent>) {
-  const rawBody = Buffer.from(JSON.stringify(event));
-  const digest = createHmac('sha256', webhookSecret)
+function signBody(
+  rawBody: Buffer,
+  options: {
+    timestamp?: string;
+    mode?: 'test' | 'live';
+    secret?: string;
+  } = {},
+): string {
+  const timestamp = options.timestamp ?? currentTimestamp();
+
+  const secret = options.secret ?? webhookSecret;
+
+  const signatureKey = options.mode === 'live' ? 'li' : 'te';
+
+  const digest = createHmac('sha256', secret)
     .update(`${timestamp}.${rawBody.toString('utf8')}`)
     .digest('hex');
 
+  return `t=${timestamp},${signatureKey}=${digest}`;
+}
+
+function signedRequest(
+  payload: unknown,
+  options: {
+    timestamp?: string;
+    mode?: 'test' | 'live';
+  } = {},
+) {
+  const rawBody = Buffer.from(JSON.stringify(payload));
+
   return {
     rawBody,
-    signature: `t=${timestamp},te=${digest}`,
-    request: { rawBody } as Request & { rawBody: Buffer },
+    signature: signBody(rawBody, options),
+    request: {
+      rawBody,
+    } as Request & { rawBody: Buffer },
   };
 }
 
 describe('PayMongoWebhookController', () => {
-  const originalSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
-  const originalMode = process.env.PAYMONGO_MODE;
   let paymentService: {
     handlePayMongoPaymentPaid: ReturnType<typeof vi.fn>;
   };
+
   let controller: PayMongoWebhookController;
 
   beforeEach(() => {
     process.env.PAYMONGO_WEBHOOK_SECRET = webhookSecret;
     process.env.PAYMONGO_MODE = 'test';
+
     paymentService = {
       handlePayMongoPaymentPaid: vi.fn().mockResolvedValue(undefined),
     };
+
     controller = new PayMongoWebhookController(
       paymentService as unknown as PaymentService,
     );
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+
     if (originalSecret === undefined) {
       delete process.env.PAYMONGO_WEBHOOK_SECRET;
     } else {
@@ -75,8 +113,9 @@ describe('PayMongoWebhookController', () => {
     }
   });
 
-  it('accepts a valid test-mode signature and forwards the paid event', async () => {
+  it('accepts a valid test-mode signed paid event', async () => {
     const event = createEvent();
+
     const { signature, request, rawBody } = signedRequest(event);
 
     await expect(controller.handleWebhook(signature, request)).resolves.toEqual(
@@ -85,11 +124,9 @@ describe('PayMongoWebhookController', () => {
       },
     );
 
-    expect(paymentService.handlePayMongoPaymentPaid).toHaveBeenCalledOnce();
-    expect(paymentService.handlePayMongoPaymentPaid).toHaveBeenCalledWith(
-      event.data,
-      rawBody,
-    );
+    expect(
+      paymentService.handlePayMongoPaymentPaid,
+    ).toHaveBeenCalledExactlyOnceWith(event.data, rawBody);
   });
 
   it.each([undefined, ''])(
@@ -100,11 +137,12 @@ describe('PayMongoWebhookController', () => {
       await expect(
         controller.handleWebhook(signature, request),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+
       expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
     },
   );
 
-  it('rejects a request without the raw body', async () => {
+  it('rejects a missing raw body', async () => {
     await expect(
       controller.handleWebhook('t=1,te=invalid', {} as Request),
     ).rejects.toBeInstanceOf(UnauthorizedException);
@@ -114,27 +152,125 @@ describe('PayMongoWebhookController', () => {
     const { request } = signedRequest(createEvent());
 
     await expect(
-      controller.handleWebhook(`t=${timestamp},te=${'0'.repeat(64)}`, request),
+      controller.handleWebhook(
+        `t=${currentTimestamp()},te=${'0'.repeat(64)}`,
+        request,
+      ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+
     expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
   });
 
-  it('rejects a signature that uses the wrong mode key', async () => {
+  it('rejects the wrong signature mode', async () => {
     const { request, rawBody } = signedRequest(createEvent());
-    const digest = createHmac('sha256', webhookSecret)
-      .update(`${timestamp}.${rawBody.toString('utf8')}`)
-      .digest('hex');
+
+    const liveSignature = signBody(rawBody, {
+      mode: 'live',
+    });
 
     await expect(
-      controller.handleWebhook(`t=${timestamp},li=${digest}`, request),
+      controller.handleWebhook(liveSignature, request),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects a signature older than five minutes', async () => {
+    const oldTimestamp = (Math.floor(Date.now() / 1000) - 301).toString();
+
+    const { signature, request } = signedRequest(createEvent(), {
+      timestamp: oldTimestamp,
+    });
+
+    await expect(
+      controller.handleWebhook(signature, request),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+  });
+
+  it('rejects a signature from too far in the future', async () => {
+    const futureTimestamp = (Math.floor(Date.now() / 1000) + 301).toString();
+
+    const { signature, request } = signedRequest(createEvent(), {
+      timestamp: futureTimestamp,
+    });
+
+    await expect(
+      controller.handleWebhook(signature, request),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it.each(['not-a-timestamp', '-1', '1.5', '999999999999999999999999'])(
+    'rejects invalid timestamp %s',
+    async (timestamp) => {
+      const { signature, request } = signedRequest(createEvent(), {
+        timestamp,
+      });
+
+      await expect(
+        controller.handleWebhook(signature, request),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    },
+  );
+
+  it('rejects malformed JSON with a valid signature', async () => {
+    const rawBody = Buffer.from('{"data":');
+
+    const request = {
+      rawBody,
+    } as Request & { rawBody: Buffer };
+
+    const signature = signBody(rawBody);
+
+    await expect(
+      controller.handleWebhook(signature, request),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    {},
+    [],
+    { data: null },
+    { data: { id: 'evt_123' } },
+    {
+      data: {
+        id: 'evt_123',
+        type: 'event',
+        attributes: null,
+      },
+    },
+    {
+      data: {
+        id: 'evt_123',
+        type: 'event',
+        attributes: {
+          type: 'checkout_session.payment.paid',
+          livemode: false,
+          data: {
+            id: 123,
+            type: 'checkout_session',
+            attributes: {},
+          },
+        },
+      },
+    },
+  ])('rejects structurally invalid webhook payload %#', async (payload) => {
+    const { signature, request } = signedRequest(payload);
+
+    await expect(
+      controller.handleWebhook(signature, request),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
   });
 
   it.each([
     'checkout_session.payment.failed',
     'checkout_session.payment.expired',
     'checkout_session.payment.cancelled',
-  ])('does not process the %s event', async (eventType) => {
+  ])('acknowledges %s without marking payment paid', async (eventType) => {
     const { signature, request } = signedRequest(createEvent(eventType));
 
     await expect(controller.handleWebhook(signature, request)).resolves.toEqual(
@@ -146,35 +282,47 @@ describe('PayMongoWebhookController', () => {
     expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
   });
 
-  it('rejects requests when the webhook secret is not configured', async () => {
-    delete process.env.PAYMONGO_WEBHOOK_SECRET;
+  it('rejects a missing webhook secret', async () => {
     const { signature, request } = signedRequest(createEvent());
+
+    delete process.env.PAYMONGO_WEBHOOK_SECRET;
 
     await expect(
       controller.handleWebhook(signature, request),
     ).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
   });
 
   it('accepts a valid live-mode signature', async () => {
     process.env.PAYMONGO_MODE = 'live';
 
     const event = createEvent();
-    const { request, rawBody } = signedRequest(event);
-
-    const digest = createHmac('sha256', webhookSecret)
-      .update(`${timestamp}.${rawBody.toString('utf8')}`)
-      .digest('hex');
-
-    await expect(
-      controller.handleWebhook(`t=${timestamp},li=${digest}`, request),
-    ).resolves.toEqual({
-      received: true,
+    const { signature, request, rawBody } = signedRequest(event, {
+      mode: 'live',
     });
 
-    expect(paymentService.handlePayMongoPaymentPaid).toHaveBeenCalledWith(
-      event.data,
-      rawBody,
+    await expect(controller.handleWebhook(signature, request)).resolves.toEqual(
+      {
+        received: true,
+      },
     );
+
+    expect(
+      paymentService.handlePayMongoPaymentPaid,
+    ).toHaveBeenCalledExactlyOnceWith(event.data, rawBody);
+  });
+
+  it('does not process an event when signature verification fails', async () => {
+    const event = createEvent();
+    const { request, rawBody } = signedRequest(event);
+
+    const wrongSignature = signBody(rawBody, {
+      secret: 'incorrect-secret',
+    });
+
+    await expect(
+      controller.handleWebhook(wrongSignature, request),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
   });
 });

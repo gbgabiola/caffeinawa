@@ -26,7 +26,9 @@ const paymentId = 'payment-1';
 const orderId = 'order-1';
 
 const webhookSecret = 'e2e-paymongo-webhook-secret';
-const webhookTimestamp = '1720000000';
+function getWebhookTimestamp(): string {
+  return Math.floor(Date.now() / 1000).toString();
+}
 
 const fixedDate = '2026-10-01T10:00:00.000Z';
 
@@ -82,11 +84,13 @@ function makeWebhookEvent(eventType = 'checkout_session.payment.paid') {
 }
 
 function signWebhook(rawBody: string): string {
+  const timestamp = getWebhookTimestamp();
+
   const digest = createHmac('sha256', webhookSecret)
-    .update(`${webhookTimestamp}.${rawBody}`)
+    .update(`${timestamp}.${rawBody}`)
     .digest('hex');
 
-  return `t=${webhookTimestamp},te=${digest}`;
+  return `t=${timestamp},te=${digest}`;
 }
 
 function createPaymentServiceMock() {
@@ -424,7 +428,10 @@ describe('Payment API (e2e)', () => {
       await request(app.getHttpServer())
         .post(endpoint)
         .set('Content-Type', 'application/json')
-        .set('Paymongo-Signature', `t=${webhookTimestamp},te=${'0'.repeat(64)}`)
+        .set(
+          'Paymongo-Signature',
+          `t=${getWebhookTimestamp()},te=${'0'.repeat(64)}`,
+        )
         .send(rawBody)
         .expect(401);
 
