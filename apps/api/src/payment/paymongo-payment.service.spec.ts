@@ -16,15 +16,18 @@ const paymentId = 'payment-1';
 const orderId = 'order-1';
 const checkoutSessionId = 'cs_test_123';
 const eventId = 'evt_test_123';
+
 const fixedDate = new Date('2026-10-01T10:00:00.000Z');
 
 type TransactionMock = {
   payment: {
     findFirst: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
   order: {
-    update: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
 };
 
@@ -78,10 +81,12 @@ function createHarness() {
   const tx: TransactionMock = {
     payment: {
       findFirst: vi.fn(),
-      update: vi.fn(),
+      findUnique: vi.fn(),
+      updateMany: vi.fn(),
     },
     order: {
-      update: vi.fn(),
+      findUnique: vi.fn(),
+      updateMany: vi.fn(),
     },
   };
 
@@ -92,10 +97,13 @@ function createHarness() {
     ),
   } as unknown as PrismaService;
 
-  const payMongoService = {} as PayMongoService;
-  const service = new PaymentService(prisma, payMongoService);
+  const service = new PaymentService(prisma, {} as PayMongoService);
 
-  return { service, prisma, tx };
+  return {
+    service,
+    prisma,
+    tx,
+  };
 }
 
 describe('PaymentService.handlePayMongoPaymentPaid', () => {
@@ -103,21 +111,19 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
 
   beforeEach(() => {
     harness = createHarness();
-  });
 
-  it('marks the payment as paid and confirms its order', async () => {
-    const pendingPayment = makePayment();
-    const paidPayment = makePayment({
-      status: PaymentStatus.PAID,
-      paymentIntentId: 'pi_test_123',
-      providerEventId: eventId,
-      paidAt: fixedDate,
-      updatedAt: fixedDate,
+    harness.tx.payment.findFirst.mockResolvedValue(makePayment());
+
+    harness.tx.payment.updateMany.mockResolvedValue({
+      count: 1,
     });
 
-    harness.tx.payment.findFirst.mockResolvedValueOnce(pendingPayment);
-    harness.tx.payment.update.mockResolvedValueOnce(paidPayment);
+    harness.tx.order.updateMany.mockResolvedValue({
+      count: 1,
+    });
+  });
 
+  it('atomically marks payment paid and confirms its order', async () => {
     await harness.service.handlePayMongoPaymentPaid(
       makePaidEvent(),
       Buffer.from('raw-webhook-body'),
@@ -125,12 +131,12 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
 
     expect(harness.prisma.$transaction).toHaveBeenCalledOnce();
 
-    expect(harness.tx.payment.findFirst).toHaveBeenCalledWith({
-      where: { checkoutSessionId },
-    });
-
-    expect(harness.tx.payment.update).toHaveBeenCalledWith({
-      where: { id: paymentId },
+    expect(harness.tx.payment.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: paymentId,
+        provider: PaymentProvider.PAYMONGO,
+        status: PaymentStatus.PENDING,
+      },
       data: {
         status: PaymentStatus.PAID,
         paymentIntentId: 'pi_test_123',
@@ -139,33 +145,22 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
       },
     });
 
-    expect(harness.tx.order.update).toHaveBeenCalledWith({
-      where: { id: orderId },
-      data: { status: OrderStatus.CONFIRMED },
+    expect(harness.tx.order.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: orderId,
+        status: OrderStatus.PENDING,
+      },
+      data: {
+        status: OrderStatus.CONFIRMED,
+      },
     });
   });
 
-  it('does not update payment or order for a duplicate event', async () => {
-    harness.tx.payment.findFirst.mockResolvedValueOnce(
-      makePayment({ providerEventId: eventId }),
-    );
-
-    await expect(
-      harness.service.handlePayMongoPaymentPaid(
-        makePaidEvent(),
-        Buffer.from('raw-webhook-body'),
-      ),
-    ).resolves.toBeUndefined();
-
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
-  });
-
-  it('does not update an already-paid payment again', async () => {
+  it('ignores a duplicate event for an already-paid payment', async () => {
     harness.tx.payment.findFirst.mockResolvedValueOnce(
       makePayment({
         status: PaymentStatus.PAID,
-        providerEventId: 'evt_previous',
+        providerEventId: eventId,
         paidAt: fixedDate,
       }),
     );
@@ -177,25 +172,128 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
       ),
     ).resolves.toBeUndefined();
 
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
   });
 
-  it('rejects a mismatched order reference', async () => {
-    harness.tx.payment.findFirst.mockResolvedValueOnce(makePayment());
+  it('ignores an already-paid payment even when event IDs differ', async () => {
+    harness.tx.payment.findFirst.mockResolvedValueOnce(
+      makePayment({
+        status: PaymentStatus.PAID,
+        providerEventId: 'evt_previous',
+        paidAt: fixedDate,
+      }),
+    );
+
+    await harness.service.handlePayMongoPaymentPaid(
+      makePaidEvent({
+        id: 'evt_another_delivery',
+      }),
+      Buffer.from('raw-webhook-body'),
+    );
+
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('treats a lost concurrent update as idempotent when the payment is now paid', async () => {
+    harness.tx.payment.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    harness.tx.payment.findUnique.mockResolvedValueOnce(
+      makePayment({
+        status: PaymentStatus.PAID,
+        providerEventId: 'evt_winning_delivery',
+        paidAt: fixedDate,
+      }),
+    );
 
     await expect(
       harness.service.handlePayMongoPaymentPaid(
-        makePaidEvent({ referenceNumber: 'another-order' }),
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(harness.tx.payment.findUnique).toHaveBeenCalledWith({
+      where: {
+        id: paymentId,
+      },
+    });
+
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a concurrent status change to FAILED', async () => {
+    harness.tx.payment.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    harness.tx.payment.findUnique.mockResolvedValueOnce(
+      makePayment({
+        status: PaymentStatus.FAILED,
+      }),
+    );
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
         Buffer.from('raw-webhook-body'),
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException when the checkout session has no payment', async () => {
+  it.each([
+    PaymentStatus.FAILED,
+    PaymentStatus.EXPIRED,
+    PaymentStatus.CANCELLED,
+  ])('rejects settlement from %s status', async (status) => {
+    harness.tx.payment.findFirst.mockResolvedValueOnce(makePayment({ status }));
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a mismatched order reference', async () => {
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent({
+          referenceNumber: 'another-order',
+        }),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-PayMongo payment', async () => {
+    harness.tx.payment.findFirst.mockResolvedValueOnce(
+      makePayment({
+        provider: PaymentProvider.CASH,
+      }),
+    );
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when no payment matches the checkout session', async () => {
     harness.tx.payment.findFirst.mockResolvedValueOnce(null);
 
     await expect(
@@ -205,7 +303,63 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('preserves an order that has already progressed to PREPARING', async () => {
+    harness.tx.order.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    harness.tx.order.findUnique.mockResolvedValueOnce({
+      id: orderId,
+      status: OrderStatus.PREPARING,
+    });
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(harness.tx.order.findUnique).toHaveBeenCalledWith({
+      where: {
+        id: orderId,
+      },
+    });
+  });
+
+  it('rejects settlement of a cancelled order', async () => {
+    harness.tx.order.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    harness.tx.order.findUnique.mockResolvedValueOnce({
+      id: orderId,
+      status: OrderStatus.CANCELLED,
+    });
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects an order that no longer exists', async () => {
+    harness.tx.order.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    harness.tx.order.findUnique.mockResolvedValueOnce(null);
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

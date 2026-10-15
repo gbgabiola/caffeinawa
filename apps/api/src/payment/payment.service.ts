@@ -276,7 +276,9 @@ export class PaymentService {
 
     await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findFirst({
-        where: { checkoutSessionId },
+        where: {
+          checkoutSessionId,
+        },
       });
 
       if (!payment) {
@@ -285,11 +287,10 @@ export class PaymentService {
         );
       }
 
-      if (
-        payment.providerEventId === event.id ||
-        payment.status === PaymentStatus.PAID
-      ) {
-        return;
+      if (payment.provider !== PaymentProvider.PAYMONGO) {
+        throw new BadRequestException(
+          'Checkout Session is not associated with a PayMongo payment',
+        );
       }
 
       if (referenceNumber && referenceNumber !== payment.orderId) {
@@ -298,8 +299,26 @@ export class PaymentService {
         );
       }
 
-      const updatedPayment = await tx.payment.update({
-        where: { id: payment.id },
+      // An already-settled payment must not be processed twice.
+      if (payment.status === PaymentStatus.PAID) {
+        return;
+      }
+
+      // Reject transitions from terminal failure states.
+      if (payment.status !== PaymentStatus.PENDING) {
+        throw new BadRequestException(
+          `Payment cannot be marked as paid from status "${payment.status}"`,
+        );
+      }
+
+      // Compare-and-set: PostgreSQL updates only a still-pending
+      // PayMongo payment. Concurrent deliveries cannot both win.
+      const claimed = await tx.payment.updateMany({
+        where: {
+          id: payment.id,
+          provider: PaymentProvider.PAYMONGO,
+          status: PaymentStatus.PENDING,
+        },
         data: {
           status: PaymentStatus.PAID,
           paymentIntentId,
@@ -308,10 +327,70 @@ export class PaymentService {
         },
       });
 
-      await tx.order.update({
-        where: { id: updatedPayment.orderId },
-        data: { status: OrderStatus.CONFIRMED },
+      if (claimed.count === 0) {
+        // Another transaction may have settled the payment.
+        // Re-read it within the transaction before deciding.
+        const currentPayment = await tx.payment.findUnique({
+          where: {
+            id: payment.id,
+          },
+        });
+
+        if (currentPayment?.status === PaymentStatus.PAID) {
+          return;
+        }
+
+        if (!currentPayment) {
+          throw new NotFoundException(`Payment "${payment.id}" not found`);
+        }
+
+        throw new BadRequestException(
+          `Payment cannot be marked as paid from status "${currentPayment.status}"`,
+        );
+      }
+
+      // Only confirm a pending order. Do not regress an order
+      // that has already progressed beyond confirmation.
+      const confirmed = await tx.order.updateMany({
+        where: {
+          id: payment.orderId,
+          status: OrderStatus.PENDING,
+        },
+        data: {
+          status: OrderStatus.CONFIRMED,
+        },
       });
+
+      if (confirmed.count === 1) {
+        return;
+      }
+
+      const order = await tx.order.findUnique({
+        where: {
+          id: payment.orderId,
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException(`Order "${payment.orderId}" not found`);
+      }
+
+      // Payment can arrive after operational order progression.
+      // Preserve the order's more advanced status.
+      if (
+        order.status === OrderStatus.CONFIRMED ||
+        order.status === OrderStatus.PREPARING ||
+        order.status === OrderStatus.READY ||
+        order.status === OrderStatus.COMPLETED
+      ) {
+        return;
+      }
+
+      // A cancelled order must never be silently confirmed or
+      // marked paid. Throwing rolls back the payment update.
+      throw new BadRequestException(
+        `Cannot confirm an order with status "${order.status}"`,
+      );
     });
   }
 
