@@ -99,6 +99,7 @@ function createPaymentServiceMock() {
     findOne: vi.fn(),
     markCashPaymentAsPaid: vi.fn(),
     handlePayMongoPaymentPaid: vi.fn(),
+    findReconciliationCandidates: vi.fn(),
   };
 }
 
@@ -157,6 +158,16 @@ describe('Payment API (e2e)', () => {
       email: 'customer@example.com',
       role: 'CUSTOMER',
     });
+  });
+
+  paymentService.findReconciliationCandidates.mockResolvedValue({
+    data: [],
+    meta: {
+      page: 1,
+      pageSize: 10,
+      total: 0,
+      totalPages: 1,
+    },
   });
 
   beforeEach(() => {
@@ -285,6 +296,89 @@ describe('Payment API (e2e)', () => {
         .expect(400);
 
       expect(paymentService.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/admin/payments/reconciliation', () => {
+    const endpoint = '/api/admin/payments/reconciliation';
+
+    it('rejects unauthenticated requests', async () => {
+      await request(app.getHttpServer()).get(endpoint).expect(401);
+
+      expect(
+        paymentService.findReconciliationCandidates,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('rejects customer accounts', async () => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(403);
+
+      expect(
+        paymentService.findReconciliationCandidates,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('allows administrators to retrieve reconciliation candidates', async () => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .query({
+          ageHours: 48,
+          page: 2,
+          pageSize: 5,
+        })
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toMatchObject({
+            data: [],
+            meta: {
+              total: 0,
+            },
+          });
+        });
+
+      expect(paymentService.findReconciliationCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ageHours: 48,
+          page: 2,
+          pageSize: 5,
+        }),
+      );
+    });
+
+    it.each([
+      { ageHours: 0 },
+      { ageHours: 721 },
+      { ageHours: 'invalid' },
+      { pageSize: 101 },
+    ])('rejects invalid query parameters: %o', async (query) => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .query(query)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(400);
+
+      expect(
+        paymentService.findReconciliationCandidates,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('uses the default age threshold of 24 hours', async () => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(paymentService.findReconciliationCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ageHours: 24,
+          page: 1,
+          pageSize: 10,
+        }),
+      );
     });
   });
 

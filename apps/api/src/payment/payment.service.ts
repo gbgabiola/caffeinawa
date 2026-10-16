@@ -17,6 +17,7 @@ import { PayMongoService } from './paymongo.service.js';
 
 import type { AdminPayment } from '@caffeinawa/types';
 import type { AdminPaymentQueryDto } from './dto/admin-payment-query.dto.js';
+import type { PaymentReconciliationQueryDto } from './dto/payment-reconciliation-query.dto.js';
 
 const ADMIN_PAYMENT_INCLUDE = {
   order: {
@@ -99,6 +100,66 @@ export class PaymentService {
       pageSize,
       total,
     );
+  }
+
+  async findReconciliationCandidates(query: PaymentReconciliationQueryDto) {
+    const { page, pageSize, ageHours } = query;
+
+    const cutoff = new Date(Date.now() - ageHours * 60 * 60 * 1000);
+
+    const where: Prisma.PaymentWhereInput = {
+      OR: [
+        {
+          status: PaymentStatus.PENDING,
+          createdAt: {
+            lt: cutoff,
+          },
+        },
+        {
+          status: PaymentStatus.PAID,
+          order: {
+            status: OrderStatus.CANCELLED,
+          },
+        },
+      ],
+    };
+
+    const total = await this.prisma.payment.count({
+      where,
+    });
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    const normalizedPage = Math.min(page, totalPages);
+
+    const payments = await this.prisma.payment.findMany({
+      where,
+      include: ADMIN_PAYMENT_INCLUDE,
+      orderBy: [
+        {
+          createdAt: 'asc',
+        },
+        {
+          id: 'asc',
+        },
+      ],
+      skip: (normalizedPage - 1) * pageSize,
+      take: pageSize,
+    });
+
+    const data = payments.map((payment) => {
+      const reconciliationReason =
+        payment.status === PaymentStatus.PAID
+          ? 'PAID_ORDER_CANCELLED'
+          : 'STALE_PENDING_PAYMENT';
+
+      return {
+        ...this.toAdminEntity(payment),
+        reconciliationReason,
+      };
+    });
+
+    return toPaginatedResponse(data, normalizedPage, pageSize, total);
   }
 
   async findOne(id: string): Promise<AdminPayment> {
