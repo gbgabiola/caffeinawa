@@ -41,6 +41,19 @@ export default function AdminPage() {
             <p className="mt-2 text-2xl font-semibold text-gray-900">—</p>
             <p className="mt-2 text-sm text-gray-500">View payments and confirm cash transactions.</p>
           </Link>
+
+          <Link
+            href="/admin/payments/reconciliation"
+            className="block rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
+          >
+            <p className="text-sm font-medium text-gray-500">Payment Reconciliation</p>
+
+            <p className="mt-2 text-2xl font-semibold text-gray-900">Review</p>
+
+            <p className="mt-2 text-sm text-gray-500">
+              Investigate rejected PayMongo payment events and review reconciliation issues.
+            </p>
+          </Link>
         </div>
       </div>
     </div>

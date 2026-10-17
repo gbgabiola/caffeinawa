@@ -8,6 +8,10 @@ const navigation = [
   { href: '/admin/customers', label: 'Customers' },
   { href: '/admin/orders', label: 'Orders' },
   { href: '/admin/payments', label: 'Payments' },
+  {
+    href: '/admin/payments/reconciliation',
+    label: 'Reconciliation',
+  },
   { href: '/admin/coffees', label: 'Coffee' },
 ] as const;
 
@@ -23,12 +27,22 @@ export default function AdminNav() {
 
         <nav aria-label="Admin navigation" className="flex gap-1 overflow-x-auto lg:flex-col">
           {navigation.map(item => {
-            const isActive = item.href === '/admin' ? pathname === item.href : pathname.startsWith(item.href);
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/admin' &&
+                pathname.startsWith(`${item.href}/`) &&
+                !navigation.some(
+                  other =>
+                    other.href !== item.href &&
+                    other.href.startsWith(`${item.href}/`) &&
+                    (pathname === other.href || pathname.startsWith(`${other.href}/`)),
+                ));
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   isActive ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`}

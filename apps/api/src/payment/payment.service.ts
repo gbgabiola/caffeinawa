@@ -168,18 +168,47 @@ export class PaymentService {
   }
 
   async findReconciliationIssues(query: PaymentIssueQueryDto) {
-    const { page, pageSize, status } = query;
+    const { page, pageSize, status, search } = query;
 
-    const where: Prisma.PaymentReconciliationIssueWhereInput = status
-      ? { status }
-      : {};
+    const where: Prisma.PaymentReconciliationIssueWhereInput = {
+      ...(status ? { status } : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                providerEventId: {
+                  contains: search,
+                  mode: 'insensitive' as const,
+                },
+              },
+              {
+                checkoutSessionId: {
+                  contains: search,
+                  mode: 'insensitive' as const,
+                },
+              },
+              {
+                paymentId: {
+                  contains: search,
+                  mode: 'insensitive' as const,
+                },
+              },
+              {
+                orderId: {
+                  contains: search,
+                  mode: 'insensitive' as const,
+                },
+              },
+            ],
+          }
+        : {}),
+    };
 
     const total = await this.prisma.paymentReconciliationIssue.count({
       where,
     });
 
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
     const normalizedPage = Math.min(page, totalPages);
 
     const issues = await this.prisma.paymentReconciliationIssue.findMany({
