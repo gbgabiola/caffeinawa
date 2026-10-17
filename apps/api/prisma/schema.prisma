@@ -145,3 +145,33 @@ enum PaymentStatus {
   EXPIRED
   CANCELLED
 }
+
+enum PaymentIssueReason {
+  PAYMENT_NOT_FOUND
+  INVALID_PROVIDER
+  ORDER_REFERENCE_MISMATCH
+  INVALID_PAYMENT_STATUS
+  INVALID_ORDER_STATUS
+  ORDER_NOT_FOUND
+}
+
+enum PaymentIssueStatus {
+  OPEN
+  REVIEWED
+}
+
+model PaymentReconciliationIssue {
+  id                String             @id @default(uuid())
+  providerEventId   String             @unique
+  checkoutSessionId String
+  paymentId         String?
+  orderId           String?
+  reason            PaymentIssueReason
+  status            PaymentIssueStatus @default(OPEN)
+  recordedAt        DateTime           @default(now())
+  reviewedAt        DateTime?
+
+  @@index([status, recordedAt])
+  @@index([checkoutSessionId])
+  @@index([orderId])
+}

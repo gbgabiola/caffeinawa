@@ -100,6 +100,8 @@ function createPaymentServiceMock() {
     markCashPaymentAsPaid: vi.fn(),
     handlePayMongoPaymentPaid: vi.fn(),
     findReconciliationCandidates: vi.fn(),
+    findReconciliationIssues: vi.fn(),
+    markReconciliationIssueReviewed: vi.fn(),
   };
 }
 
@@ -193,6 +195,27 @@ describe('Payment API (e2e)', () => {
     );
 
     paymentService.handlePayMongoPaymentPaid.mockResolvedValue(undefined);
+
+    paymentService.findReconciliationIssues.mockResolvedValue({
+      data: [],
+      meta: {
+        page: 1,
+        pageSize: 10,
+        total: 0,
+        totalPages: 1,
+      },
+    });
+
+    paymentService.markReconciliationIssueReviewed.mockResolvedValue({
+      id: 'issue-1',
+      providerEventId: 'evt_rejected_123',
+      checkoutSessionId: 'cs_test_123',
+      paymentId: 'payment-1',
+      orderId: 'order-1',
+      reason: 'INVALID_ORDER_STATUS',
+      status: 'REVIEWED',
+      reviewedAt: '2026-10-17T00:00:00.000Z',
+    });
   });
 
   afterAll(async () => {
@@ -379,6 +402,79 @@ describe('Payment API (e2e)', () => {
           pageSize: 10,
         }),
       );
+    });
+  });
+
+  describe('Payment reconciliation issue routes', () => {
+    const endpoint = '/api/admin/payments/reconciliation/issues';
+
+    it('requires authentication to list issues', async () => {
+      await request(app.getHttpServer()).get(endpoint).expect(401);
+    });
+
+    it('rejects customers from listing issues', async () => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(403);
+    });
+
+    it('allows administrators to list open issues', async () => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .query({
+          status: 'OPEN',
+          page: 1,
+          pageSize: 10,
+        })
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(paymentService.findReconciliationIssues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'OPEN',
+          page: 1,
+          pageSize: 10,
+        }),
+      );
+    });
+
+    it('rejects invalid issue status filters', async () => {
+      await request(app.getHttpServer())
+        .get(endpoint)
+        .query({ status: 'INVALID' })
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(400);
+
+      expect(paymentService.findReconciliationIssues).not.toHaveBeenCalled();
+    });
+
+    it('prevents customers from reviewing issues', async () => {
+      await request(app.getHttpServer())
+        .patch(`${endpoint}/issue-1/review`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(403);
+
+      expect(
+        paymentService.markReconciliationIssueReviewed,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('allows administrators to review an issue', async () => {
+      await request(app.getHttpServer())
+        .patch(`${endpoint}/issue-1/review`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200)
+        .expect(({ body }) => {
+          expect(body).toMatchObject({
+            id: 'issue-1',
+            status: 'REVIEWED',
+          });
+        });
+
+      expect(
+        paymentService.markReconciliationIssueReviewed,
+      ).toHaveBeenCalledWith('issue-1');
     });
   });
 

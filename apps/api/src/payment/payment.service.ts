@@ -1,10 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
   OrderStatus,
+  PaymentIssueReason,
+  PaymentIssueStatus,
   PaymentProvider,
   PaymentStatus,
   Prisma,
@@ -17,6 +20,7 @@ import { PayMongoService } from './paymongo.service.js';
 
 import type { AdminPayment } from '@caffeinawa/types';
 import type { AdminPaymentQueryDto } from './dto/admin-payment-query.dto.js';
+import type { PaymentIssueQueryDto } from './dto/payment-issue-query.dto.js';
 import type { PaymentReconciliationQueryDto } from './dto/payment-reconciliation-query.dto.js';
 
 const ADMIN_PAYMENT_INCLUDE = {
@@ -31,6 +35,7 @@ const ADMIN_PAYMENT_INCLUDE = {
 type AdminPaymentRecord = Prisma.PaymentGetPayload<{
   include: typeof ADMIN_PAYMENT_INCLUDE;
 }>;
+const paymentLogger = new Logger('PaymentService');
 
 @Injectable()
 export class PaymentService {
@@ -160,6 +165,64 @@ export class PaymentService {
     });
 
     return toPaginatedResponse(data, normalizedPage, pageSize, total);
+  }
+
+  async findReconciliationIssues(query: PaymentIssueQueryDto) {
+    const { page, pageSize, status } = query;
+
+    const where: Prisma.PaymentReconciliationIssueWhereInput = status
+      ? { status }
+      : {};
+
+    const total = await this.prisma.paymentReconciliationIssue.count({
+      where,
+    });
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    const normalizedPage = Math.min(page, totalPages);
+
+    const issues = await this.prisma.paymentReconciliationIssue.findMany({
+      where,
+      orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+      skip: (normalizedPage - 1) * pageSize,
+      take: pageSize,
+    });
+
+    return toPaginatedResponse(issues, normalizedPage, pageSize, total);
+  }
+
+  async markReconciliationIssueReviewed(id: string) {
+    const result = await this.prisma.paymentReconciliationIssue.updateMany({
+      where: {
+        id,
+        status: PaymentIssueStatus.OPEN,
+      },
+      data: {
+        status: PaymentIssueStatus.REVIEWED,
+        reviewedAt: new Date(),
+      },
+    });
+
+    const issue = await this.prisma.paymentReconciliationIssue.findUnique({
+      where: { id },
+    });
+
+    if (!issue) {
+      throw new NotFoundException(
+        `Payment reconciliation issue "${id}" not found`,
+      );
+    }
+
+    // A repeated request returns the existing reviewed record
+    // without changing its original reviewedAt timestamp.
+    if (result.count === 0 && issue.status !== PaymentIssueStatus.REVIEWED) {
+      throw new BadRequestException(
+        'Payment reconciliation issue could not be reviewed',
+      );
+    }
+
+    return issue;
   }
 
   async findOne(id: string): Promise<AdminPayment> {
@@ -335,124 +398,172 @@ export class PaymentService {
     const referenceNumber = event.attributes.data.attributes.reference_number;
     const paymentIntentId = event.attributes.data.attributes.payment_intent?.id;
 
-    await this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findFirst({
-        where: {
-          checkoutSessionId,
-        },
-      });
+    let paymentId: string | undefined;
+    let orderId: string | undefined;
+    let issueReason: PaymentIssueReason | undefined;
 
-      if (!payment) {
-        throw new NotFoundException(
-          `Payment for Checkout Session "${checkoutSessionId}" not found`,
-        );
-      }
-
-      if (payment.provider !== PaymentProvider.PAYMONGO) {
-        throw new BadRequestException(
-          'Checkout Session is not associated with a PayMongo payment',
-        );
-      }
-
-      if (referenceNumber && referenceNumber !== payment.orderId) {
-        throw new BadRequestException(
-          'PayMongo order reference does not match payment order',
-        );
-      }
-
-      // An already-settled payment must not be processed twice.
-      if (payment.status === PaymentStatus.PAID) {
-        return;
-      }
-
-      // Reject transitions from terminal failure states.
-      if (payment.status !== PaymentStatus.PENDING) {
-        throw new BadRequestException(
-          `Payment cannot be marked as paid from status "${payment.status}"`,
-        );
-      }
-
-      // Compare-and-set: PostgreSQL updates only a still-pending
-      // PayMongo payment. Concurrent deliveries cannot both win.
-      const claimed = await tx.payment.updateMany({
-        where: {
-          id: payment.id,
-          provider: PaymentProvider.PAYMONGO,
-          status: PaymentStatus.PENDING,
-        },
-        data: {
-          status: PaymentStatus.PAID,
-          paymentIntentId,
-          providerEventId: event.id,
-          paidAt: new Date(),
-        },
-      });
-
-      if (claimed.count === 0) {
-        // Another transaction may have settled the payment.
-        // Re-read it within the transaction before deciding.
-        const currentPayment = await tx.payment.findUnique({
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.findFirst({
           where: {
-            id: payment.id,
+            checkoutSessionId,
           },
         });
 
-        if (currentPayment?.status === PaymentStatus.PAID) {
+        if (!payment) {
+          issueReason = PaymentIssueReason.PAYMENT_NOT_FOUND;
+
+          throw new NotFoundException(
+            `Payment for Checkout Session "${checkoutSessionId}" not found`,
+          );
+        }
+
+        paymentId = payment.id;
+        orderId = payment.orderId;
+
+        if (payment.provider !== PaymentProvider.PAYMONGO) {
+          issueReason = PaymentIssueReason.INVALID_PROVIDER;
+
+          throw new BadRequestException(
+            'Checkout Session is not associated with a PayMongo payment',
+          );
+        }
+
+        if (referenceNumber && referenceNumber !== payment.orderId) {
+          issueReason = PaymentIssueReason.ORDER_REFERENCE_MISMATCH;
+
+          throw new BadRequestException(
+            'PayMongo order reference does not match payment order',
+          );
+        }
+
+        if (payment.status === PaymentStatus.PAID) {
           return;
         }
 
-        if (!currentPayment) {
-          throw new NotFoundException(`Payment "${payment.id}" not found`);
+        if (payment.status !== PaymentStatus.PENDING) {
+          issueReason = PaymentIssueReason.INVALID_PAYMENT_STATUS;
+
+          throw new BadRequestException(
+            `Payment cannot be marked as paid from status "${payment.status}"`,
+          );
         }
 
+        const claimed = await tx.payment.updateMany({
+          where: {
+            id: payment.id,
+            provider: PaymentProvider.PAYMONGO,
+            status: PaymentStatus.PENDING,
+          },
+          data: {
+            status: PaymentStatus.PAID,
+            paymentIntentId,
+            providerEventId: event.id,
+            paidAt: new Date(),
+          },
+        });
+
+        if (claimed.count === 0) {
+          const currentPayment = await tx.payment.findUnique({
+            where: {
+              id: payment.id,
+            },
+          });
+
+          if (currentPayment?.status === PaymentStatus.PAID) {
+            return;
+          }
+
+          if (!currentPayment) {
+            issueReason = PaymentIssueReason.PAYMENT_NOT_FOUND;
+
+            throw new NotFoundException(`Payment "${payment.id}" not found`);
+          }
+
+          issueReason = PaymentIssueReason.INVALID_PAYMENT_STATUS;
+
+          throw new BadRequestException(
+            `Payment cannot be marked as paid from status "${currentPayment.status}"`,
+          );
+        }
+
+        const confirmed = await tx.order.updateMany({
+          where: {
+            id: payment.orderId,
+            status: OrderStatus.PENDING,
+          },
+          data: {
+            status: OrderStatus.CONFIRMED,
+          },
+        });
+
+        if (confirmed.count === 1) {
+          return;
+        }
+
+        const order = await tx.order.findUnique({
+          where: {
+            id: payment.orderId,
+          },
+        });
+
+        if (!order) {
+          issueReason = PaymentIssueReason.ORDER_NOT_FOUND;
+
+          throw new NotFoundException(`Order "${payment.orderId}" not found`);
+        }
+
+        if (
+          order.status === OrderStatus.CONFIRMED ||
+          order.status === OrderStatus.PREPARING ||
+          order.status === OrderStatus.READY ||
+          order.status === OrderStatus.COMPLETED
+        ) {
+          return;
+        }
+
+        issueReason = PaymentIssueReason.INVALID_ORDER_STATUS;
+
         throw new BadRequestException(
-          `Payment cannot be marked as paid from status "${currentPayment.status}"`,
+          `Cannot confirm an order with status "${order.status}"`,
+        );
+      });
+    } catch (error: unknown) {
+      // An unexpected database or application error should not
+      // be disguised as a payment-state conflict.
+      if (!issueReason) {
+        throw error;
+      }
+
+      // The settlement transaction has already rolled back.
+      // This write is separate, so the issue remains durable.
+      try {
+        await this.prisma.paymentReconciliationIssue.upsert({
+          where: {
+            providerEventId: event.id,
+          },
+          create: {
+            providerEventId: event.id,
+            checkoutSessionId,
+            paymentId,
+            orderId,
+            reason: issueReason,
+            status: PaymentIssueStatus.OPEN,
+          },
+          update: {},
+        });
+      } catch (auditError: unknown) {
+        paymentLogger.error(
+          `Failed to record reconciliation issue for PayMongo event ${event.id}`,
+          auditError instanceof Error ? auditError.stack : String(auditError),
         );
       }
 
-      // Only confirm a pending order. Do not regress an order
-      // that has already progressed beyond confirmation.
-      const confirmed = await tx.order.updateMany({
-        where: {
-          id: payment.orderId,
-          status: OrderStatus.PENDING,
-        },
-        data: {
-          status: OrderStatus.CONFIRMED,
-        },
-      });
-
-      if (confirmed.count === 1) {
-        return;
-      }
-
-      const order = await tx.order.findUnique({
-        where: {
-          id: payment.orderId,
-        },
-      });
-
-      if (!order) {
-        throw new NotFoundException(`Order "${payment.orderId}" not found`);
-      }
-
-      // Payment can arrive after operational order progression.
-      // Preserve the order's more advanced status.
-      if (
-        order.status === OrderStatus.CONFIRMED ||
-        order.status === OrderStatus.PREPARING ||
-        order.status === OrderStatus.READY ||
-        order.status === OrderStatus.COMPLETED
-      ) {
-        return;
-      }
-
-      // A cancelled order must never be silently confirmed or
-      // marked paid. Throwing rolls back the payment update.
-      throw new BadRequestException(
-        `Cannot confirm an order with status "${order.status}"`,
-      );
-    });
+      // Preserve the original HTTP error. PayMongo can retry
+      // the webhook, while operators have a durable audit record
+      // when the audit write succeeds.
+      throw error;
+    }
   }
 
   private toAdminEntity(payment: AdminPaymentRecord): AdminPayment {

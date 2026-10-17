@@ -1,6 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   OrderStatus,
+  PaymentIssueReason,
+  PaymentIssueStatus,
   PaymentProvider,
   PaymentStatus,
   Prisma,
@@ -95,6 +97,11 @@ function createHarness() {
       async (callback: (transaction: TransactionMock) => Promise<unknown>) =>
         callback(tx),
     ),
+    paymentReconciliationIssue: {
+      upsert: vi.fn().mockResolvedValue({
+        id: 'issue-1',
+      }),
+    },
   } as unknown as PrismaService;
 
   const service = new PaymentService(prisma, {} as PayMongoService);
@@ -361,5 +368,97 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
         Buffer.from('raw-webhook-body'),
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('records a rejected cancelled-order settlement outside the transaction', async () => {
+    harness.tx.order.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
+
+    harness.tx.order.findUnique.mockResolvedValueOnce({
+      id: orderId,
+      status: OrderStatus.CANCELLED,
+    });
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(
+      harness.prisma.paymentReconciliationIssue.upsert,
+    ).toHaveBeenCalledWith({
+      where: {
+        providerEventId: eventId,
+      },
+      create: {
+        providerEventId: eventId,
+        checkoutSessionId,
+        paymentId,
+        orderId,
+        reason: PaymentIssueReason.INVALID_ORDER_STATUS,
+        status: PaymentIssueStatus.OPEN,
+      },
+      update: {},
+    });
+  });
+
+  it('records a missing payment without requiring a payment ID', async () => {
+    harness.tx.payment.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      harness.service.handlePayMongoPaymentPaid(
+        makePaidEvent(),
+        Buffer.from('raw-webhook-body'),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(
+      harness.prisma.paymentReconciliationIssue.upsert,
+    ).toHaveBeenCalledWith({
+      where: {
+        providerEventId: eventId,
+      },
+      create: {
+        providerEventId: eventId,
+        checkoutSessionId,
+        paymentId: undefined,
+        orderId: undefined,
+        reason: PaymentIssueReason.PAYMENT_NOT_FOUND,
+        status: PaymentIssueStatus.OPEN,
+      },
+      update: {},
+    });
+  });
+
+  it('does not audit a successful settlement', async () => {
+    await harness.service.handlePayMongoPaymentPaid(
+      makePaidEvent(),
+      Buffer.from('raw-webhook-body'),
+    );
+
+    expect(
+      harness.prisma.paymentReconciliationIssue.upsert,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not audit an already-paid duplicate', async () => {
+    harness.tx.payment.findFirst.mockResolvedValueOnce(
+      makePayment({
+        status: PaymentStatus.PAID,
+        providerEventId: eventId,
+      }),
+    );
+
+    await harness.service.handlePayMongoPaymentPaid(
+      makePaidEvent(),
+      Buffer.from('raw-webhook-body'),
+    );
+
+    expect(
+      harness.prisma.paymentReconciliationIssue.upsert,
+    ).not.toHaveBeenCalled();
   });
 });
