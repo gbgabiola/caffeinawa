@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, unit tests, builds and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://postgres:ci_password@localhost:5432/caffeinawa?schema=public
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+
+      - name: Build shared types
+        run: pnpm --filter @caffeinawa/types build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Run unit and frontend tests
+        run: pnpm test
+
+      - name: Build applications
+        run: pnpm build
+
+      - name: Check types
+        run: pnpm typecheck
+
+  api-e2e:
+    name: API end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://postgres:ci_password@localhost:5432/caffeinawa?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:ci_password@localhost:5432/caffeinawa_test?schema=public
+      PAYMONGO_MODE: test
+      WEB_URL: http://localhost:3000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: caffeinawa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d caffeinawa_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Generate temporary test JWT secret
+        shell: bash
+        run: |
+          jwt_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$jwt_secret"
+          echo "JWT_SECRET=$jwt_secret" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+
+      - name: Build shared types
+        run: pnpm --filter @caffeinawa/types build
+
+      - name: Validate database isolation
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+
+          const development = new URL(process.env.DATABASE_URL);
+          const test = new URL(process.env.TEST_DATABASE_URL);
+
+          assert.equal(development.pathname, '/caffeinawa');
+          assert.equal(test.pathname, '/caffeinawa_test');
+          assert.notEqual(development.href, test.href);
+          NODE
+
+      - name: Apply test database migrations
+        shell: bash
+        run: |
+          DATABASE_URL="$TEST_DATABASE_URL" \
+            pnpm --filter api exec prisma migrate deploy
+
+      - name: Run API end-to-end tests
+        shell: bash
+        run: |
+          DATABASE_URL="$TEST_DATABASE_URL" \
+            pnpm --filter api exec vitest run \
+              --config ./vitest.config.e2e.ts \
+              --no-file-parallelism
