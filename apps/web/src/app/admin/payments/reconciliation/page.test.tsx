@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PaymentReconciliationIssue } from '@/features/payment-reconciliation/payment-reconciliation.api';
-
+import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import AdminPaymentReconciliationPage from './page';
+
+import type { PaymentReconciliationIssue } from '@/features/payment-reconciliation/payment-reconciliation.api';
 
 const mocks = vi.hoisted(() => ({
   getIssues: vi.fn(),
@@ -57,7 +58,7 @@ function makeResponse(
   } = {},
 ) {
   const page = options.page ?? 1;
-  const pageSize = options.pageSize ?? 10;
+  const pageSize = options.pageSize ?? ADMIN_PAGE_SIZE;
   const total = options.total ?? issues.length;
 
   return {
@@ -69,6 +70,16 @@ function makeResponse(
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
     },
   };
+}
+
+function getOpenCountCard() {
+  const card = screen.getByText('Open reconciliation issues').parentElement;
+
+  if (!card) {
+    throw new Error('Open reconciliation count card was not found.');
+  }
+
+  return within(card);
 }
 
 function renderPage() {
@@ -129,7 +140,7 @@ describe('AdminPaymentReconciliationPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
-  it('loads open issues and displays the open count', async () => {
+  it('loads open issues and displays the global open count', async () => {
     renderPage();
 
     expect(screen.getByText('Loading reconciliation issues...')).toBeInTheDocument();
@@ -142,11 +153,20 @@ describe('AdminPaymentReconciliationPage', () => {
       'test-admin-token',
       expect.objectContaining({
         page: 1,
+        pageSize: ADMIN_PAGE_SIZE,
         status: 'OPEN',
       }),
     );
 
-    expect(screen.getByText('Open reconciliation issues')).toBeInTheDocument();
+    expect(mocks.getIssues).toHaveBeenCalledWith('test-admin-token', {
+      page: 1,
+      pageSize: 1,
+      status: 'OPEN',
+    });
+
+    await waitFor(() => {
+      expect(getOpenCountCard().getByText('1')).toBeInTheDocument();
+    });
   });
 
   it('passes the search input to the API query', async () => {
@@ -197,7 +217,7 @@ describe('AdminPaymentReconciliationPage', () => {
         if (query.pageSize === 1) {
           return makeResponse([makeIssue()], {
             pageSize: 1,
-            total: 12,
+            total: ADMIN_PAGE_SIZE + 2,
           });
         }
 
@@ -208,8 +228,8 @@ describe('AdminPaymentReconciliationPage', () => {
 
         return makeResponse([issue], {
           page: query.page,
-          pageSize: 10,
-          total: 12,
+          pageSize: query.pageSize,
+          total: ADMIN_PAGE_SIZE + 2,
         });
       },
     );
@@ -283,6 +303,10 @@ describe('AdminPaymentReconciliationPage', () => {
 
     await screen.findByText('cs_test_123');
 
+    await waitFor(() => {
+      expect(getOpenCountCard().getByText('1')).toBeInTheDocument();
+    });
+
     await user.click(
       screen.getByRole('button', {
         name: 'Mark Reviewed',
@@ -295,6 +319,14 @@ describe('AdminPaymentReconciliationPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('No reconciliation issues found.')).toBeInTheDocument();
+    });
+
+    expect(window.confirm).toHaveBeenCalledExactlyOnceWith(
+      'Mark this reconciliation issue as reviewed? ' + 'This does not refund, settle, or update the payment.',
+    );
+
+    await waitFor(() => {
+      expect(getOpenCountCard().getByText('0')).toBeInTheDocument();
     });
   });
 
