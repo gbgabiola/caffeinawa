@@ -8,6 +8,8 @@ async function bootstrap() {
     rawBody: true,
   });
 
+  app.enableShutdownHooks();
+
   app.setGlobalPrefix('api');
 
   app.enableCors({
