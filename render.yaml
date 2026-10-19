@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: caffeinawa-api
+    runtime: node
+    plan: free
+    autoDeploy: false
+
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile --prod=false &&
+      pnpm --filter @caffeinawa/types build &&
+      pnpm --filter api exec prisma generate &&
+      pnpm --filter api build
+
+    startCommand: >-
+      pnpm --filter api exec prisma migrate deploy &&
+      pnpm --filter api start:prod
+
+    healthCheckPath: /api/health/ready
+
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+
+      - key: NODE_ENV
+        value: production
+
+      - key: DATABASE_URL
+        sync: false
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: WEB_URL
+        sync: false
+
+      - key: PAYMONGO_MODE
+        value: test
