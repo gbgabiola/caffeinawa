@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Coffee } from '@caffeinawa/types';
+
 import { useAuth } from '@/components/auth/AuthProvider';
-import { addCartItem, getCart } from '@/lib/api/cart';
-// NOTE: If you have a separate update or delete function in your API file, import it here:
-// import { updateCartItem, removeCartItem } from '@/lib/api/cart';
+import { addCartItem, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
+
+import type { Coffee } from '@caffeinawa/types';
 
 interface CoffeeCardProps {
   coffee: Coffee;
@@ -63,7 +63,6 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
     };
   }, [accessToken, coffee.id, customer, isAuthenticated]);
 
-  // INCREMENT: Standard addition handling
   async function handleIncrement() {
     if (!isAuthenticated || !customer || !accessToken) {
       router.push('/login');
@@ -83,37 +82,38 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
     }
   }
 
-  // DECREMENT FIXED: Uses local state fallback management to counteract the addCartItem restriction
   async function handleDecrement() {
     if (!isAuthenticated || !customer || !accessToken) {
       router.push('/login');
       return;
     }
 
-    const previousQuantity = quantity;
-    const targetQuantity = Math.max(0, quantity - 1);
+    if (updating || loadingCart || quantity < 1) {
+      return;
+    }
 
-    // Optimistically update the UI screen counter immediately
-    setQuantity(targetQuantity);
     setUpdating(true);
     setError(null);
 
     try {
-      /*
-        👉 PATHWAY FIX:
-        If your backend has an update endpoint or a way to pass specific absolute values, change this to:
-        const cart = await updateCartItem(accessToken, customer.id, coffee.id, targetQuantity);
+      const currentCart = await getCart(accessToken, customer.id);
 
-        Otherwise, if your backend only supports single incremental `addCartItem`,
-        we block further server addition loops on minus clicks here.
-      */
+      const currentItem = currentCart.items.find(item => item.coffeeId === coffee.id);
 
-      // Let's assume you'll connect a custom backend decrement route here.
-      // For now, we secure the client-side state value firmly so it doesn't double-count upwards.
-      setQuantity(targetQuantity);
+      if (!currentItem) {
+        setQuantity(0);
+        return;
+      }
+
+      const updatedCart =
+        currentItem.quantity === 1
+          ? await removeCartItem(accessToken, customer.id, currentItem.id)
+          : await updateCartItem(accessToken, customer.id, currentItem.id, currentItem.quantity - 1);
+
+      const updatedItem = updatedCart.items.find(item => item.coffeeId === coffee.id);
+
+      setQuantity(updatedItem?.quantity ?? 0);
     } catch (err) {
-      // Revert back safely if the server updates fail
-      setQuantity(previousQuantity);
       setError(err instanceof Error ? err.message : 'Unable to reduce item count.');
     } finally {
       setUpdating(false);
@@ -200,7 +200,6 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
               </button>
             </div>
           ) : (
-            /* Main Add Button Trigger */
             <button
               type="button"
               onClick={() => void handleIncrement()}
