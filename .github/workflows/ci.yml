@@ -61,6 +61,21 @@ jobs:
       - name: Check types
         run: pnpm typecheck
 
+      - name: Build static storefront
+        env:
+          STATIC_EXPORT: 'true'
+          NEXT_PUBLIC_API_URL: https://api.example.test/api
+        run: pnpm --filter web build
+
+      - name: Verify exported storefront routes
+        shell: bash
+        run: |
+          test -f apps/web/out/index.html
+          test -f apps/web/out/menu/index.html
+          test -f apps/web/out/admin/payments/reconciliation/index.html
+          test -f apps/web/out/checkout/success/index.html
+          test -f apps/web/out/checkout/cancelled/index.html
+
   api-e2e:
     name: API end-to-end tests
     runs-on: ubuntu-latest
