@@ -8,7 +8,7 @@ interface CoffeeGridProps {
 
 export function CoffeeGrid({ coffees }: CoffeeGridProps) {
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3">
       {coffees.map(coffee => (
         <CoffeeCard key={coffee.id} coffee={coffee} />
       ))}
