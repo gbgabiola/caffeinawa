@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 
 import type { CoffeeCategory } from '@caffeinawa/types';
@@ -54,73 +54,98 @@ function MenuContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#faf7f2] text-[#30251f]">
-      <section className="border-b border-[#e7dfd5]">
-        <div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#886345]">The Caffeinawa menu</p>
+    <main className="flex-1 bg-cafe-cream text-cafe-espresso">
+      <section className="relative isolate overflow-hidden border-b border-cafe-border">
+        <div className="absolute inset-0 -z-10">
+          <Image
+            src="/images/menu-hero.png"
+            alt=""
+            fill
+            unoptimized
+            loading="eager"
+            sizes="100vw"
+            className="object-cover object-[68%_center] md:object-center"
+          />
 
-            <h1 className="mt-5 font-serif text-5xl leading-[1.08] tracking-tight sm:text-6xl">
-              Find your next
+          <div className="absolute inset-0 bg-linear-to-r from-cafe-cream via-cafe-cream/90 to-cafe-cream/20 md:via-cafe-cream/60 md:to-transparent" />
+        </div>
+
+        <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:py-24">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-cafe-accent">
+              The Caffeinawa menu
+            </p>
+
+            <h1 className="mt-5 font-display text-[clamp(2.75rem,5.8vw,5.25rem)] leading-[1.03] tracking-[-0.055em]">
+              Good coffee.
               <br />
-              coffee moment.
+              Your kind of moment.
             </h1>
 
-            <p className="mt-5 max-w-lg text-base leading-7 text-[#75685e]">
+            <p className="mt-6 max-w-sm text-sm leading-7 text-cafe-brown sm:text-base">
               Something bold, something smooth, or something chilled. Find your favorite and make it yours.
             </p>
-          </div>
 
-          <Link
-            href="/cart/"
-            className="inline-flex min-h-12 w-fit items-center justify-center gap-3 rounded-full bg-[#38271f] px-6 text-sm font-semibold text-white transition hover:bg-[#543a2d] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#886345]"
-          >
-            View your cart
-            <span aria-hidden="true">↗</span>
-          </Link>
+            <a
+              href="#coffee-menu"
+              className="mt-7 inline-flex min-h-11 items-center gap-3 text-sm font-semibold text-cafe-espresso underline decoration-cafe-accent underline-offset-8"
+            >
+              Explore the menu
+              <span aria-hidden="true">↓</span>
+            </a>
+          </div>
         </div>
       </section>
 
-      <section aria-labelledby="menu-heading" className="mx-auto max-w-7xl px-5 py-9 sm:px-8 sm:py-12">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="menu-heading" className="font-serif text-3xl tracking-tight">
-              Made for your mood
-            </h2>
+      <section
+        id="coffee-menu"
+        aria-labelledby="menu-heading"
+        className="mx-auto max-w-7xl scroll-mt-6 px-5 py-9 sm:px-8 sm:py-12"
+      >
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <h2 id="menu-heading" className="font-display text-3xl tracking-[-0.04em] sm:text-4xl">
+            Find your favorite
+          </h2>
 
-            <p className="mt-2 text-sm text-[#75685e]">Explore the menu or find your usual.</p>
-          </div>
-
-          <div className="w-full sm:max-w-sm">
-            <label
-              htmlFor="menu-search"
-              className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#75685e]"
-            >
-              Find a drink
+          <div className="relative w-full sm:max-w-sm">
+            <label htmlFor="menu-search" className="sr-only">
+              Search the menu
             </label>
+
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cafe-muted"
+            >
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 4 4" strokeLinecap="round" />
+            </svg>
 
             <input
               id="menu-search"
               type="search"
               value={search}
               onChange={event => setSearch(event.target.value)}
-              placeholder="Search coffee, flavors, or a favorite..."
-              className="min-h-12 w-full rounded-2xl border border-[#ded4c8] bg-white px-4 text-base text-[#30251f] outline-none transition placeholder:text-[#94877c] focus:border-[#886345] focus:ring-2 focus:ring-[#886345]/20"
+              placeholder="Search the menu"
+              className="min-h-12 w-full rounded-full border border-cafe-border bg-cafe-paper py-3 pl-12 pr-4 text-base text-cafe-espresso placeholder:text-cafe-muted sm:text-sm"
             />
           </div>
         </div>
 
-        <div role="group" aria-label="Filter drinks by category" className="mt-7 flex flex-wrap gap-2">
+        <div role="group" aria-label="Filter drinks by category" className="mt-6 flex gap-2 overflow-x-auto pb-3">
           {categories.map(item => (
             <button
               key={item.value}
               type="button"
               aria-pressed={category === item.value}
               onClick={() => setCategory(item.value)}
-              className={`min-h-11 rounded-full border px-4 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886345] ${
+              className={`min-h-11 shrink-0 rounded-full border px-5 text-sm font-medium transition-colors ${
                 category === item.value
-                  ? 'border-[#38271f] bg-[#38271f] text-white'
-                  : 'border-[#e3d9cd] bg-transparent text-[#75685e] hover:border-[#886345] hover:bg-white'
+                  ? 'border-cafe-accent bg-cafe-accent text-white'
+                  : 'border-cafe-border bg-transparent text-cafe-brown hover:border-cafe-accent hover:bg-cafe-paper'
               }`}
             >
               {item.label}
@@ -131,15 +156,15 @@ function MenuContent() {
         {menuQuery.isPending ? (
           <div
             role="status"
-            className="mt-8 rounded-3xl border border-[#e7dfd5] bg-white px-6 py-14 text-center text-sm text-[#75685e]"
+            className="mt-6 rounded-2xl border border-cafe-border bg-cafe-paper px-6 py-16 text-center text-sm text-cafe-muted"
           >
             Brewing up the menu...
           </div>
         ) : menuQuery.isError ? (
-          <div className="mt-8 rounded-3xl border border-red-200 bg-white p-8">
-            <h3 className="text-lg font-semibold">We couldn&apos;t load the menu</h3>
+          <div className="mt-6 rounded-2xl border border-red-200 bg-cafe-paper p-8">
+            <h3 className="font-display text-2xl">We couldn&apos;t load the menu</h3>
 
-            <p role="alert" className="mt-2 text-sm text-red-700">
+            <p role="alert" className="mt-3 text-sm text-red-700">
               {menuQuery.error.message}
             </p>
 
@@ -147,15 +172,15 @@ function MenuContent() {
               type="button"
               disabled={menuQuery.isFetching}
               onClick={() => void menuQuery.refetch()}
-              className="mt-5 min-h-11 rounded-full bg-[#38271f] px-5 text-sm font-semibold text-white hover:bg-[#543a2d] disabled:opacity-50"
+              className="mt-5 min-h-11 rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:opacity-50"
             >
               {menuQuery.isFetching ? 'Trying again...' : 'Try again'}
             </button>
           </div>
         ) : (
           <>
-            <div className="my-6 flex flex-wrap items-center justify-between gap-3">
-              <p role="status" className="text-sm text-[#75685e]">
+            <div className="mb-5 mt-3 flex min-h-11 items-center justify-between gap-4">
+              <p role="status" className="text-sm text-cafe-muted">
                 {filteredCoffees.length} {filteredCoffees.length === 1 ? 'drink' : 'drinks'}
                 {hasFilters ? ' matching your selection' : ' to explore'}
               </p>
@@ -164,7 +189,7 @@ function MenuContent() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="min-h-11 text-sm font-semibold text-[#6f4c35] underline decoration-[#c8b39d] underline-offset-4 hover:text-[#30251f]"
+                  className="min-h-11 shrink-0 text-sm font-semibold text-cafe-accent underline underline-offset-4"
                 >
                   Clear filters
                 </button>
@@ -172,23 +197,23 @@ function MenuContent() {
             </div>
 
             {coffees.length === 0 ? (
-              <div className="rounded-3xl border border-[#e7dfd5] bg-white px-6 py-14 text-center">
-                <h3 className="font-serif text-2xl">The menu is taking a little break</h3>
+              <div className="rounded-2xl border border-cafe-border bg-cafe-paper px-6 py-16 text-center">
+                <h3 className="font-display text-2xl">The menu is taking a little break</h3>
 
-                <p className="mt-3 text-sm leading-6 text-[#75685e]">
+                <p className="mt-3 text-sm leading-6 text-cafe-muted">
                   No drinks have been added yet. Please check back soon.
                 </p>
               </div>
             ) : filteredCoffees.length === 0 ? (
-              <div className="rounded-3xl border border-[#e7dfd5] bg-white px-6 py-14 text-center">
-                <h3 className="font-serif text-2xl">No drinks found</h3>
+              <div className="rounded-2xl border border-cafe-border bg-cafe-paper px-6 py-16 text-center">
+                <h3 className="font-display text-2xl">No drinks found</h3>
 
-                <p className="mt-3 text-sm leading-6 text-[#75685e]">Try another search or explore the full menu.</p>
+                <p className="mt-3 text-sm leading-6 text-cafe-muted">Try another search or explore the full menu.</p>
 
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="mt-5 min-h-11 rounded-full border border-[#ded4c8] px-5 text-sm font-semibold hover:bg-[#faf7f2]"
+                  className="mt-5 min-h-11 rounded-full border border-cafe-border px-5 text-sm font-semibold hover:bg-cafe-soft"
                 >
                   Show all drinks
                 </button>
