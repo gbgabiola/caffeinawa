@@ -1,51 +1,74 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
 
 function CancelledContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
 
   return (
-    <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-xl text-amber-700">
-          !
+    <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-12 text-cafe-espresso sm:py-16">
+      <section className="w-full max-w-xl overflow-hidden rounded-3xl border border-cafe-border bg-cafe-paper">
+        <div className="border-b border-cafe-border px-6 py-8 sm:px-9">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">
+            Your coffee moment can wait
+          </p>
+
+          <h1 className="mt-5 font-display text-4xl leading-tight tracking-[-0.04em] sm:text-5xl">
+            Back from checkout.
+          </h1>
+
+          <p className="mt-4 text-sm leading-7 text-cafe-muted">
+            Before starting another checkout, check the latest status of your order.
+          </p>
         </div>
 
-        <p className="mt-6 text-sm font-medium text-gray-500">Caffeinawa</p>
+        <div className="px-6 py-7 sm:px-9">
+          {orderId ? (
+            <>
+              <dl className="rounded-xl bg-cafe-cream p-4">
+                <dt className="text-[11px] font-semibold uppercase tracking-wider text-cafe-muted">Order reference</dt>
 
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Checkout cancelled</h1>
+                <dd className="mt-2 break-all font-mono text-sm">{orderId}</dd>
+              </dl>
 
-        <p className="mt-3 text-gray-600">
-          Your payment checkout was cancelled before payment confirmation. You can return to checkout and try again.
-        </p>
+              <Link
+                href={`/checkout/success?orderId=${encodeURIComponent(orderId)}`}
+                className="mt-6 flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+              >
+                Check order status
+              </Link>
 
-        {orderId && (
-          <div className="mt-6 rounded-xl bg-gray-50 p-4 text-left">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Order</p>
-            <p className="mt-1 break-all text-sm font-medium text-gray-900">{orderId}</p>
+              <p className="mt-4 text-xs leading-6 text-cafe-muted">
+                Returning to this page does not confirm whether your payment completed or your order was cancelled.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm leading-7 text-cafe-muted">
+              No order reference was included in this link. Keep any reference provided during checkout if you need help
+              checking an order.
+            </p>
+          )}
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/cart"
+              className="flex min-h-12 flex-1 items-center justify-center rounded-full border border-cafe-border px-5 text-sm font-semibold hover:bg-cafe-soft"
+            >
+              View your cart
+            </Link>
+
+            <Link
+              href="/menu"
+              className="flex min-h-12 flex-1 items-center justify-center rounded-full border border-cafe-border px-5 text-sm font-semibold hover:bg-cafe-soft"
+            >
+              Back to the menu
+            </Link>
           </div>
-        )}
-
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/checkout"
-            className="flex-1 rounded-lg bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
-          >
-            Return to checkout
-          </Link>
-
-          <Link
-            href="/menu"
-            className="flex-1 rounded-lg border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            Return to menu
-          </Link>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
@@ -54,8 +77,10 @@ export default function CheckoutCancelledPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-          <p className="text-sm text-gray-600">Loading...</p>
+        <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16">
+          <p role="status" className="text-sm text-cafe-muted">
+            Loading checkout details...
+          </p>
         </main>
       }
     >

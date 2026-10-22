@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
@@ -9,287 +9,315 @@ import type { Order } from '@caffeinawa/types';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOrder } from '@/lib/api/orders';
 
-const PAYMENT_CONFIRMATION_TIMEOUT_MS = 30_000;
-const PAYMENT_POLL_INTERVAL_MS = 2_000;
+const CONFIRMATION_TIMEOUT_MS = 30_000;
+const POLL_INTERVAL_MS = 2_000;
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-  }).format(value);
+const currencyFormatter = new Intl.NumberFormat('en-PH', {
+  style: 'currency',
+  currency: 'PHP',
+});
+
+const presentations: Record<
+  Order['status'],
+  {
+    label: string;
+    heading: string;
+    description: string;
+  }
+> = {
+  pending: {
+    label: 'Awaiting confirmation',
+    heading: 'Your order is received.',
+    description: 'Your order is awaiting confirmation. We’re checking for updates.',
+  },
+  confirmed: {
+    label: 'Confirmed',
+    heading: 'Your order is confirmed.',
+    description: 'Your coffee moment is one step closer. Here are your order details.',
+  },
+  preparing: {
+    label: 'Preparing',
+    heading: 'Something good is brewing.',
+    description: 'Your order is being prepared. Check back for its latest status.',
+  },
+  ready: {
+    label: 'Ready',
+    heading: 'Your order is ready.',
+    description: 'Your drinks are ready. Keep your order reference handy.',
+  },
+  completed: {
+    label: 'Completed',
+    heading: 'Thanks for sharing a moment.',
+    description: 'Your order is complete. We look forward to your next coffee moment.',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    heading: 'This order was cancelled.',
+    description: 'The order is marked as cancelled. This status does not confirm a refund.',
+  },
+};
+
+function LoadingResult() {
+  return (
+    <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16">
+      <p role="status" className="text-sm text-cafe-muted">
+        Checking your order...
+      </p>
+    </main>
+  );
 }
 
-function SuccessContent() {
-  const searchParams = useSearchParams();
-  const { accessToken, isLoading } = useAuth();
+interface OrderLookupProps {
+  orderId: string;
+  accessToken: string;
+}
 
-  const orderId = searchParams.get('orderId');
-
+function OrderLookup({ orderId, accessToken }: OrderLookupProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
+  const [loadingOrder, setLoadingOrder] = useState(true);
+  const [checking, setChecking] = useState(true);
   const [timedOut, setTimedOut] = useState(false);
-
-  const loadOrder = useCallback(async () => {
-    if (!accessToken || !orderId) {
-      return;
-    }
-
-    try {
-      const currentOrder = await getOrder(accessToken, orderId);
-
-      setOrder(currentOrder);
-      setError(null);
-
-      return currentOrder;
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load order.');
-      return null;
-    }
-  }, [accessToken, orderId]);
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
-    if (isLoading || !accessToken || !orderId) {
-      return;
-    }
-
     let cancelled = false;
+    let stopped = false;
+    let nextPoll: ReturnType<typeof setTimeout> | undefined;
 
-    async function checkPaymentStatus() {
-      const currentOrder = await loadOrder();
+    const deadline = setTimeout(() => {
+      if (cancelled || stopped) return;
 
-      if (cancelled) {
-        return;
-      }
+      stopped = true;
 
-      if (currentOrder && currentOrder.status !== 'pending' && currentOrder.status !== 'cancelled') {
-        setIsChecking(false);
-
-        if (intervalId) {
-          clearInterval(intervalId);
-        }
-
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-
-        return;
-      }
-
-      setIsChecking(true);
-    }
-
-    void checkPaymentStatus();
-
-    const intervalId = setInterval(() => {
-      void checkPaymentStatus();
-    }, PAYMENT_POLL_INTERVAL_MS);
-
-    const timeoutId = setTimeout(() => {
-      if (cancelled) {
-        return;
-      }
+      if (nextPoll) clearTimeout(nextPoll);
 
       setTimedOut(true);
-      setIsChecking(false);
+      setChecking(false);
+      setLoadingOrder(false);
+    }, CONFIRMATION_TIMEOUT_MS);
 
-      if (intervalId) {
-        clearInterval(intervalId);
+    async function checkOrder() {
+      try {
+        const result = await getOrder(accessToken, orderId);
+
+        if (cancelled) return;
+
+        setOrder(result);
+        setError(null);
+
+        if (result.status !== 'pending') {
+          stopped = true;
+          clearTimeout(deadline);
+          setChecking(false);
+          setTimedOut(false);
+        } else if (!stopped) {
+          nextPoll = setTimeout(() => {
+            void checkOrder();
+          }, POLL_INTERVAL_MS);
+        }
+      } catch (cause) {
+        if (cancelled) return;
+
+        stopped = true;
+        clearTimeout(deadline);
+        setChecking(false);
+
+        setError(cause instanceof Error ? cause.message : 'Unable to check your order.');
+      } finally {
+        if (!cancelled) {
+          setLoadingOrder(false);
+        }
       }
-    }, PAYMENT_CONFIRMATION_TIMEOUT_MS);
+    }
+
+    void checkOrder();
 
     return () => {
       cancelled = true;
+      stopped = true;
+      clearTimeout(deadline);
 
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      if (nextPoll) clearTimeout(nextPoll);
     };
-  }, [accessToken, isLoading, loadOrder, orderId]);
+  }, [accessToken, orderId, refreshCount]);
 
-  if (isLoading) {
-    return (
-      <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-        <p className="text-sm text-gray-600">Checking your order...</p>
-      </main>
-    );
+  function refreshStatus() {
+    if (checking) return;
+
+    setError(null);
+    setTimedOut(false);
+    setChecking(true);
+    setLoadingOrder(order === null);
+    setRefreshCount(count => count + 1);
   }
 
-  if (!accessToken) {
-    return (
-      <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-        <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Order received</h1>
-
-          <p className="mt-3 text-gray-600">Sign in to view the current status of your order.</p>
-
-          <Link
-            href="/login"
-            className="mt-6 inline-flex rounded-lg bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
-          >
-            Sign in
-          </Link>
-        </div>
-      </main>
-    );
+  if (loadingOrder && !order) {
+    return <LoadingResult />;
   }
 
-  if (!orderId) {
-    return (
-      <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-        <div className="w-full max-w-lg rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-red-900">Order information is missing</h1>
-
-          <p className="mt-3 text-sm text-red-700">We could not determine which order this checkout belongs to.</p>
-
-          <Link
-            href="/menu"
-            className="mt-6 inline-flex rounded-lg bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
-          >
-            Return to menu
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  if (error && !order) {
-    return (
-      <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-        <div className="w-full max-w-lg rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-red-900">Unable to load your order</h1>
-
-          <p className="mt-3 text-sm text-red-700">{error}</p>
-
-          <Link
-            href="/account"
-            className="mt-6 inline-flex rounded-lg bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
-          >
-            Go to account
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  const isConfirmed =
-    order?.status === 'confirmed' ||
-    order?.status === 'preparing' ||
-    order?.status === 'ready' ||
-    order?.status === 'completed';
-
-  const isCancelled = order?.status === 'cancelled';
+  const presentation = order ? presentations[order.status] : null;
 
   return (
-    <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-        {isConfirmed ? (
-          <>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-xl text-green-700">
-              ✓
-            </div>
-
-            <p className="mt-6 text-sm font-medium text-gray-500">Caffeinawa</p>
-
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Payment confirmed</h1>
-
-            <p className="mt-3 text-gray-600">Your payment has been confirmed and your order is now being processed.</p>
-          </>
-        ) : isCancelled ? (
-          <>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-xl text-red-700">
-              !
-            </div>
-
-            <p className="mt-6 text-sm font-medium text-gray-500">Caffeinawa</p>
-
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Order cancelled</h1>
-
-            <p className="mt-3 text-gray-600">This order has been cancelled and the payment was not confirmed.</p>
-          </>
-        ) : (
-          <>
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-xl text-amber-700">
-              …
-            </div>
-
-            <p className="mt-6 text-sm font-medium text-gray-500">Caffeinawa</p>
-
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Payment processing</h1>
-
-            <p className="mt-3 text-gray-600">
-              Your checkout was completed, but payment confirmation is still being processed. We&apos;re checking the
-              order status automatically.
+    <main className="flex-1 bg-cafe-cream px-5 py-12 text-cafe-espresso sm:py-16">
+      <div className="mx-auto max-w-2xl">
+        <section className="overflow-hidden rounded-3xl border border-cafe-border bg-cafe-paper">
+          <div className="border-b border-cafe-border px-6 py-8 sm:px-10 sm:py-10">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">
+              Your Caffeinawa order
             </p>
-          </>
-        )}
 
-        {order && (
-          <div className="mt-8 rounded-xl bg-gray-50 p-5">
-            <div className="flex items-start justify-between gap-4">
+            {presentation && (
+              <span
+                className={`mt-5 inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                  order?.status === 'cancelled'
+                    ? 'border-red-200 bg-red-50 text-red-700'
+                    : order?.status === 'pending'
+                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                      : 'border-cafe-border bg-cafe-soft text-cafe-brown'
+                }`}
+              >
+                {presentation.label}
+              </span>
+            )}
+
+            <h1 className="mt-5 font-display text-4xl leading-tight tracking-[-0.04em] sm:text-5xl">
+              {presentation?.heading ?? 'Let’s check your order.'}
+            </h1>
+
+            <p className="mt-4 max-w-lg text-sm leading-7 text-cafe-muted">
+              {presentation?.description ??
+                'Your order details are temporarily unavailable. You can try checking again.'}
+            </p>
+          </div>
+
+          <div className="px-6 py-7 sm:px-10">
+            <dl className="space-y-5">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Order</p>
-                <p className="mt-1 break-all text-sm font-medium text-gray-900">{order.id}</p>
+                <dt className="text-[11px] font-semibold uppercase tracking-wider text-cafe-muted">Order reference</dt>
+
+                <dd className="mt-2 break-all font-mono text-sm">{order?.id ?? orderId}</dd>
               </div>
 
-              <div className="text-right">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total</p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">{formatCurrency(order.total)}</p>
-              </div>
-            </div>
+              {order && (
+                <div className="flex items-center justify-between gap-4 border-t border-cafe-border pt-5">
+                  <dt className="text-sm font-medium">Order total</dt>
 
-            <div className="mt-4 border-t border-gray-200 pt-4">
-              <p className="text-sm text-gray-600">
-                Status: <span className="font-medium capitalize text-gray-900">{order.status}</span>
+                  <dd className="text-2xl font-semibold tabular-nums">{currencyFormatter.format(order.total)}</dd>
+                </div>
+              )}
+            </dl>
+
+            {checking && order && (
+              <p role="status" className="mt-5 text-sm text-cafe-muted">
+                Checking for an update...
               </p>
+            )}
+
+            {error && (
+              <p
+                role="alert"
+                className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700"
+              >
+                {error}
+              </p>
+            )}
+
+            {timedOut && (
+              <div
+                role="status"
+                className="mt-5 rounded-xl border border-cafe-border bg-cafe-cream p-4 text-sm leading-7 text-cafe-brown"
+              >
+                We&apos;re still waiting for an update. You can check again without placing another order.
+              </div>
+            )}
+
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                disabled={checking}
+                onClick={refreshStatus}
+                className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:opacity-50"
+              >
+                {checking ? 'Checking...' : 'Refresh order status'}
+              </button>
+
+              <Link
+                href="/menu"
+                className="flex min-h-12 flex-1 items-center justify-center rounded-full border border-cafe-border px-5 text-sm font-semibold hover:bg-cafe-soft"
+              >
+                Back to the menu
+              </Link>
             </div>
+
+            <p className="mt-5 text-xs leading-6 text-cafe-muted">
+              Keep your order reference for any questions about this order.
+            </p>
           </div>
-        )}
-
-        {timedOut && !isConfirmed && !isCancelled && (
-          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Payment confirmation is taking longer than expected. Your order has not been treated as paid based on the
-            redirect alone. You can check your account again shortly.
-          </div>
-        )}
-
-        {error && order && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-        {isChecking && <p className="mt-4 text-center text-xs text-gray-500">Waiting for payment confirmation...</p>}
-
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/account"
-            className="flex-1 rounded-lg border border-gray-300 px-5 py-3 text-center text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-          >
-            View account
-          </Link>
-
-          <Link
-            href="/menu"
-            className="flex-1 rounded-lg bg-black px-5 py-3 text-center text-sm font-medium text-white transition hover:bg-gray-800"
-          >
-            Continue shopping
-          </Link>
-        </div>
+        </section>
       </div>
     </main>
   );
 }
 
+function SuccessContent() {
+  const searchParams = useSearchParams();
+  const orderId = searchParams.get('orderId');
+
+  const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingResult />;
+  }
+
+  if (!orderId) {
+    return (
+      <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16 text-cafe-espresso">
+        <section className="w-full max-w-lg rounded-3xl border border-cafe-border bg-cafe-paper p-8 text-center">
+          <h1 className="font-display text-3xl">Order reference missing</h1>
+
+          <p className="mt-4 text-sm leading-7 text-cafe-muted">
+            Open the complete order-status link to check your order.
+          </p>
+
+          <Link
+            href="/menu"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+          >
+            Back to the menu
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  if (!isAuthenticated || !customer || !accessToken) {
+    return (
+      <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16 text-cafe-espresso">
+        <section className="w-full max-w-lg rounded-3xl border border-cafe-border bg-cafe-paper p-8 text-center">
+          <h1 className="font-display text-3xl">Sign in to check your order</h1>
+
+          <p className="mt-4 text-sm leading-7 text-cafe-muted">
+            Use the account that placed this order. After signing in, reopen this order-status link.
+          </p>
+
+          <Link
+            href="/login"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+          >
+            Sign in
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  return <OrderLookup key={`${customer.id}:${orderId}`} orderId={orderId} accessToken={accessToken} />;
+}
+
 export default function CheckoutSuccessPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-[calc(100vh-5rem)] items-center justify-center px-6 py-16">
-          <p className="text-sm text-gray-600">Loading order...</p>
-        </main>
-      }
-    >
+    <Suspense fallback={<LoadingResult />}>
       <SuccessContent />
     </Suspense>
   );
