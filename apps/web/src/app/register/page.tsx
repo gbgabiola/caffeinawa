@@ -1,16 +1,36 @@
 'use client';
 
+import { Suspense, useEffect, useState, type ComponentProps } from 'react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
+import AuthShell from '@/components/auth/AuthShell';
 import { useAuth } from '@/components/auth/AuthProvider';
+import FormField from '@/components/ui/FormField';
+import { getSafeReturnPath } from '@/lib/auth-redirect';
 
-type FormSubmitHandler = NonNullable<React.ComponentProps<'form'>['onSubmit']>;
+type FormSubmitHandler = NonNullable<ComponentProps<'form'>['onSubmit']>;
 
-export default function RegisterPage() {
+const inputClassName =
+  'mt-2 min-h-12 w-full rounded-xl border border-cafe-border bg-white px-4 py-3 text-base text-cafe-espresso placeholder:text-cafe-muted';
+
+function SessionLoading() {
+  return (
+    <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16">
+      <p role="status" className="text-sm text-cafe-muted">
+        Checking your session...
+      </p>
+    </main>
+  );
+}
+
+function RegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { register, isAuthenticated, isLoading } = useAuth();
+
+  const destination = getSafeReturnPath(searchParams.get('next'));
+  const loginHref = `/login?next=${encodeURIComponent(destination)}`;
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -20,26 +40,25 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/');
+    if (!isLoading && isAuthenticated) {
+      router.replace(destination);
     }
-  }, [isAuthenticated, router]);
-
-  if (isLoading) {
-    return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
-        <p className="text-sm text-gray-600">Checking your session...</p>
-      </main>
-    );
-  }
+  }, [destination, isAuthenticated, isLoading, router]);
 
   const handleSubmit: FormSubmitHandler = async event => {
     event.preventDefault();
 
+    if (isSubmitting) return;
+
     setError('');
 
+    if (!name.trim()) {
+      setError('Please enter your name.');
+      return;
+    }
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('Your passwords do not match.');
       return;
     }
 
@@ -47,130 +66,133 @@ export default function RegisterPage() {
 
     try {
       await register({
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim(),
         password,
       });
 
-      router.replace('/login');
+      router.replace(`${loginHref}&registered=1`);
     } catch {
-      setError('Unable to create your account. Please check your information and try again.');
-    } finally {
+      setError('Unable to create your account. Check your information and try again.');
       setIsSubmitting(false);
     }
   };
 
+  if (isLoading || isAuthenticated) {
+    return <SessionLoading />;
+  }
+
   return (
-    <main className="flex flex-1 items-center justify-center px-6 py-16">
-      <section className="w-full max-w-md">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold tracking-tight">Create your account</h1>
-
-          <p className="mt-3 text-gray-600">Join Caffeinawa and make your next coffee moment count.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium">
-              Name
-            </label>
-
-            <input
-              id="name"
-              name="name"
-              type="text"
-              autoComplete="name"
-              required
-              maxLength={100}
-              value={name}
-              onChange={event => setName(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium">
-              Email
-            </label>
-
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              maxLength={255}
-              value={email}
-              onChange={event => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium">
-              Password
-            </label>
-
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              maxLength={128}
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
-            />
-
-            <p className="mt-2 text-xs text-gray-500">Password must be between 8 and 128 characters.</p>
-          </div>
-
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium">
-              Confirm password
-            </label>
-
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              maxLength={128}
-              value={confirmPassword}
-              onChange={event => setConfirmPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
-            />
-          </div>
-
-          {error && (
-            <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
+    <AuthShell
+      eyebrow="Make yourself at home"
+      title="Your coffee journey starts here."
+      description="Create an account to save your details and place your order."
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <FormField htmlFor="name" label="Name">
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            maxLength={100}
             disabled={isSubmitting}
-            className="w-full rounded-lg bg-black px-5 py-3 font-medium text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? 'Creating account...' : 'Create account'}
-          </button>
-        </form>
+            value={name}
+            onChange={event => setName(event.target.value)}
+            className={inputClassName}
+          />
+        </FormField>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link
-            href="/login"
-            className="font-medium text-cafe-accent underline underline-offset-4 transition-opacity hover:opacity-80"
+        <FormField htmlFor="email" label="Email address">
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+            maxLength={255}
+            disabled={isSubmitting}
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+            className={inputClassName}
+          />
+        </FormField>
+
+        <FormField htmlFor="password" label="Password" description="Use between 8 and 128 characters.">
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            maxLength={128}
+            disabled={isSubmitting}
+            aria-describedby="password-guidance"
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            className={inputClassName}
+          />
+
+          <span id="password-guidance" className="sr-only">
+            Use between 8 and 128 characters.
+          </span>
+        </FormField>
+
+        <FormField htmlFor="confirmPassword" label="Confirm password">
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            maxLength={128}
+            disabled={isSubmitting}
+            value={confirmPassword}
+            onChange={event => setConfirmPassword(event.target.value)}
+            className={inputClassName}
+          />
+        </FormField>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
           >
-            Sign in
-          </Link>
-        </p>
-      </section>
-    </main>
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-wait disabled:opacity-50"
+        >
+          {isSubmitting ? 'Creating account...' : 'Create account'}
+        </button>
+      </form>
+
+      <p className="mt-7 text-center text-sm leading-7 text-cafe-muted">
+        Already have an account?{' '}
+        <Link
+          href={loginHref}
+          className="inline-block py-2 font-semibold text-cafe-accent underline underline-offset-4"
+        >
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<SessionLoading />}>
+      <RegisterContent />
+    </Suspense>
   );
 }

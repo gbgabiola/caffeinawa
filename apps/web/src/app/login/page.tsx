@@ -1,16 +1,38 @@
 'use client';
 
+import { Suspense, useEffect, useState, type ComponentProps } from 'react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+import AuthShell from '@/components/auth/AuthShell';
+import FormField from '@/components/ui/FormField';
+import { getSafeReturnPath } from '@/lib/auth-redirect';
 
-type FormSubmitHandler = NonNullable<React.ComponentProps<'form'>['onSubmit']>;
+type FormSubmitHandler = NonNullable<ComponentProps<'form'>['onSubmit']>;
 
-export default function LoginPage() {
+const inputClassName =
+  'mt-2 min-h-12 w-full rounded-xl border border-cafe-border bg-white px-4 py-3 text-base text-cafe-espresso placeholder:text-cafe-muted';
+
+function SessionLoading() {
+  return (
+    <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16">
+      <p role="status" className="text-sm text-cafe-muted">
+        Checking your session...
+      </p>
+    </main>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isAuthenticated, isLoading } = useAuth();
+
+  const destination = getSafeReturnPath(searchParams.get('next'));
+  const registrationCompleted = searchParams.get('registered') === '1';
+
+  const registerHref = `/register?next=${encodeURIComponent(destination)}`;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,104 +40,115 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/');
+    if (!isLoading && isAuthenticated) {
+      router.replace(destination);
     }
-  }, [isAuthenticated, router]);
-
-  if (isLoading) {
-    return (
-      <main className="flex flex-1 items-center justify-center px-6 py-16">
-        <p className="text-sm text-gray-600">Checking your session...</p>
-      </main>
-    );
-  }
+  }, [destination, isAuthenticated, isLoading, router]);
 
   const handleSubmit: FormSubmitHandler = async event => {
     event.preventDefault();
+
+    if (isSubmitting) return;
 
     setError('');
     setIsSubmitting(true);
 
     try {
-      await login({ email, password });
-      router.replace('/');
+      await login({
+        email: email.trim(),
+        password,
+      });
+
+      // AuthProvider updates authentication state.
+      // The effect above handles navigation.
     } catch {
-      setError('Invalid email or password.');
+      setError('Unable to sign in. Check your email and password, then try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (isLoading || isAuthenticated) {
+    return <SessionLoading />;
+  }
+
   return (
-    <main className="flex flex-1 items-center justify-center px-6 py-16">
-      <section className="w-full max-w-md">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold tracking-tight">Welcome back</h1>
-
-          <p className="mt-3 text-gray-600">Sign in to your Caffeinawa account.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium">
-              Email
-            </label>
-
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={event => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium">
-              Password
-            </label>
-
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-400 bg-white px-4 py-3 text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
-            />
-          </div>
-
-          {error && (
-            <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-lg bg-black px-5 py-3 font-medium text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Don&apos;t have an account?{' '}
-          <Link
-            href="/register"
-            className="font-medium text-cafe-accent underline underline-offset-4 transition-opacity hover:opacity-80"
-          >
-            Create one
-          </Link>
+    <AuthShell eyebrow="Your usual awaits" title="Welcome back." description="Sign in to pick up where you left off.">
+      {registrationCompleted && (
+        <p
+          role="status"
+          className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm leading-6 text-green-800"
+        >
+          Your account has been created. Sign in to continue.
         </p>
-      </section>
-    </main>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <FormField htmlFor="email" label="Email address">
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+            disabled={isSubmitting}
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+            className={inputClassName}
+          />
+        </FormField>
+
+        <FormField htmlFor="password" label="Password">
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            disabled={isSubmitting}
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            className={inputClassName}
+          />
+        </FormField>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+          >
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-wait disabled:opacity-50"
+        >
+          {isSubmitting ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+
+      <p className="mt-7 text-center text-sm leading-7 text-cafe-muted">
+        New to Caffeinawa?{' '}
+        <Link
+          href={registerHref}
+          className="inline-block py-2 font-semibold text-cafe-accent underline underline-offset-4"
+        >
+          Create an account
+        </Link>
+      </p>
+    </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<SessionLoading />}>
+      <LoginContent />
+    </Suspense>
   );
 }
