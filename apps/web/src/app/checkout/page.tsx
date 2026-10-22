@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import type { Cart, PaymentProvider } from '@caffeinawa/types';
@@ -14,27 +14,40 @@ const currencyFormatter = new Intl.NumberFormat('en-PH', {
   currency: 'PHP',
 });
 
-export default function CheckoutPage() {
+const paymentMethods: {
+  value: PaymentProvider;
+  title: string;
+  description: string;
+}[] = [
+  {
+    value: 'cash',
+    title: 'Cash',
+    description: 'Pay for your order in cash.',
+  },
+  {
+    value: 'paymongo',
+    title: 'PayMongo',
+    description: 'Continue to hosted checkout to complete payment.',
+  },
+];
+
+interface CustomerCheckoutProps {
+  customerId: string;
+  accessToken: string;
+}
+
+function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
   const router = useRouter();
-  const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
+  const checkoutInFlight = useRef(false);
 
   const [cart, setCart] = useState<Cart | null>(null);
   const [loadingCart, setLoadingCart] = useState(true);
+  const [refreshCount, setRefreshCount] = useState(0);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('cash');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    if (!isAuthenticated || !customer || !accessToken) {
-      return;
-    }
-
-    const currentCustomer = customer;
-    const currentAccessToken = accessToken;
     let cancelled = false;
 
     async function loadCart() {
@@ -42,18 +55,11 @@ export default function CheckoutPage() {
       setError(null);
 
       try {
-        const result = await getCart(currentAccessToken, currentCustomer.id);
+        const result = await getCart(accessToken, customerId);
 
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          setCart(result);
         }
-
-        if (result.items.length === 0) {
-          router.replace('/cart');
-          return;
-        }
-
-        setCart(result);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Unable to load your cart.');
@@ -70,18 +76,21 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, customer, isAuthenticated, isLoading, router]);
+  }, [accessToken, customerId, refreshCount]);
+
+  const hasUnavailableItem = cart?.items.some(item => !item.coffee.available) ?? false;
 
   async function handleCheckout() {
-    if (!customer || !accessToken || !cart) {
+    if (!cart || cart.items.length === 0 || hasUnavailableItem || checkoutInFlight.current) {
       return;
     }
 
+    checkoutInFlight.current = true;
     setSubmitting(true);
     setError(null);
 
     try {
-      const result = await checkoutCart(accessToken, customer.id, paymentProvider);
+      const result = await checkoutCart(accessToken, customerId, paymentProvider);
 
       if (isPayMongoCheckoutResponse(result)) {
         window.location.assign(result.checkoutUrl);
@@ -90,155 +99,240 @@ export default function CheckoutPage() {
 
       router.replace(`/checkout/success?orderId=${encodeURIComponent(result.id)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to place your order.');
+      checkoutInFlight.current = false;
       setSubmitting(false);
+
+      setError(err instanceof Error ? err.message : 'Unable to place your order.');
     }
   }
 
-  if (isLoading || loadingCart) {
+  const itemCount = cart?.items.reduce((total, item) => total + item.quantity, 0) ?? 0;
+
+  return (
+    <main className="flex-1 bg-cafe-cream text-cafe-espresso">
+      <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
+        {submitting ? (
+          <p role="status" className="min-h-11 text-sm text-cafe-muted">
+            Completing your checkout...
+          </p>
+        ) : (
+          <Link
+            href="/cart"
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-cafe-muted hover:text-cafe-espresso"
+          >
+            <span aria-hidden="true">←</span>
+            Back to your cart
+          </Link>
+        )}
+
+        <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">One step closer</p>
+
+        <h1 className="mt-3 font-display text-4xl tracking-[-0.04em] sm:text-5xl">Make it your moment.</h1>
+
+        <p className="mt-3 text-sm leading-7 text-cafe-muted">
+          Review your drinks and choose how you&apos;d like to pay.
+        </p>
+
+        {error && (
+          <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        {loadingCart ? (
+          <p
+            role="status"
+            className="mt-8 rounded-2xl border border-cafe-border bg-cafe-paper px-6 py-14 text-center text-sm text-cafe-muted"
+          >
+            Preparing checkout...
+          </p>
+        ) : !cart ? (
+          <section className="mt-8 rounded-2xl border border-cafe-border bg-cafe-paper p-8 text-center">
+            <h2 className="font-display text-2xl">We couldn&apos;t prepare checkout</h2>
+
+            <button
+              type="button"
+              onClick={() => setRefreshCount(count => count + 1)}
+              className="mt-5 min-h-12 rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+            >
+              Try again
+            </button>
+          </section>
+        ) : cart.items.length === 0 ? (
+          <section className="mt-8 rounded-2xl border border-cafe-border bg-cafe-paper px-6 py-14 text-center">
+            <h2 className="font-display text-3xl">Your cart is empty</h2>
+
+            <p className="mt-3 text-sm text-cafe-muted">Choose your drinks before continuing to checkout.</p>
+
+            <Link
+              href="/menu"
+              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            >
+              Explore the menu
+            </Link>
+          </section>
+        ) : (
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-6">
+              <section
+                aria-labelledby="payment-heading"
+                className="rounded-2xl border border-cafe-border bg-cafe-paper p-5 sm:p-7"
+              >
+                <h2 id="payment-heading" className="font-display text-2xl">
+                  How would you like to pay?
+                </h2>
+
+                <fieldset disabled={submitting} className="mt-5">
+                  <legend className="sr-only">Payment method</legend>
+
+                  <div className="grid gap-3">
+                    {paymentMethods.map(method => {
+                      const selected = paymentProvider === method.value;
+
+                      return (
+                        <label
+                          key={method.value}
+                          className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+                            selected ? 'border-cafe-accent bg-cafe-soft' : 'border-cafe-border hover:bg-cafe-cream'
+                          } ${submitting ? 'cursor-wait opacity-70' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="payment-provider"
+                            value={method.value}
+                            checked={selected}
+                            onChange={() => setPaymentProvider(method.value)}
+                            className="mt-1 h-4 w-4 shrink-0 accent-cafe-accent"
+                          />
+
+                          <span>
+                            <span className="block text-sm font-semibold">{method.title}</span>
+
+                            <span className="mt-1 block text-sm leading-6 text-cafe-muted">{method.description}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </section>
+
+              <section
+                aria-labelledby="checkout-items-heading"
+                className="rounded-2xl border border-cafe-border bg-cafe-paper p-5 sm:p-7"
+              >
+                <h2 id="checkout-items-heading" className="font-display text-2xl">
+                  Your selection
+                </h2>
+
+                <ul className="mt-4 divide-y divide-cafe-border">
+                  {cart.items.map(item => (
+                    <li key={item.id} className="flex items-start justify-between gap-4 py-4">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-sm font-semibold">{item.coffee.name}</h3>
+
+                        <p className="mt-2 text-sm text-cafe-muted">
+                          {item.quantity} × {currencyFormatter.format(item.coffee.price)}
+                        </p>
+
+                        {!item.coffee.available && (
+                          <p className="mt-2 text-sm font-medium text-red-700">Currently unavailable</p>
+                        )}
+                      </div>
+
+                      <p className="shrink-0 text-sm font-semibold tabular-nums">
+                        {currencyFormatter.format(item.subtotal)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <aside
+              aria-labelledby="checkout-summary-heading"
+              className="rounded-2xl border border-cafe-border bg-cafe-paper p-6 lg:sticky lg:top-6"
+            >
+              <h2 id="checkout-summary-heading" className="font-display text-2xl">
+                Order summary
+              </h2>
+
+              <div className="mt-5 flex justify-between gap-4 text-sm text-cafe-muted">
+                <span>Drinks</span>
+                <span>{itemCount}</span>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between gap-4 border-t border-cafe-border pt-5">
+                <span className="font-medium">Total</span>
+
+                <span className="text-2xl font-semibold tabular-nums">{currencyFormatter.format(cart.total)}</span>
+              </div>
+
+              {hasUnavailableItem && (
+                <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
+                  Return to your cart and remove unavailable drinks before placing your order.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void handleCheckout()}
+                disabled={submitting || hasUnavailableItem}
+                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting
+                  ? paymentProvider === 'paymongo'
+                    ? 'Redirecting...'
+                    : 'Placing order...'
+                  : paymentProvider === 'paymongo'
+                    ? 'Continue to PayMongo'
+                    : 'Place cash order'}
+              </button>
+
+              <p className="mt-4 text-center text-xs leading-6 text-cafe-muted">
+                {paymentProvider === 'paymongo'
+                  ? 'You will leave Caffeinawa to complete payment on PayMongo.'
+                  : 'Your order will be placed with cash as the payment method.'}
+              </p>
+            </aside>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+export default function CheckoutPage() {
+  const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
     return (
-      <main className="mx-auto w-full max-w-4xl px-6 py-12">
-        <p className="text-sm text-gray-500">Preparing checkout...</p>
+      <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16">
+        <p role="status" className="text-sm text-cafe-muted">
+          Checking your session...
+        </p>
       </main>
     );
   }
 
   if (!isAuthenticated || !customer || !accessToken) {
     return (
-      <main className="mx-auto w-full max-w-4xl px-6 py-12">
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Sign in to checkout</h1>
+      <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16 text-cafe-espresso">
+        <section className="w-full max-w-lg rounded-3xl border border-cafe-border bg-cafe-paper p-8 text-center">
+          <h1 className="font-display text-3xl">Sign in to checkout</h1>
 
-          <p className="mt-2 text-gray-600">You need to be signed in before placing an order.</p>
+          <p className="mt-4 text-sm leading-7 text-cafe-muted">Sign in to review your cart and place your order.</p>
 
           <Link
             href="/login"
-            className="mt-6 inline-block rounded-lg bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-700"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
           >
             Sign in
           </Link>
-        </div>
+        </section>
       </main>
     );
   }
 
-  if (!cart) {
-    return null;
-  }
-
-  const hasUnavailableItem = cart.items.some(item => !item.coffee.available);
-
-  return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      <div>
-        <h1 className="text-3xl font-semibold text-gray-900">Checkout</h1>
-        <p className="mt-1 text-gray-600">Confirm your order and choose how you want to pay.</p>
-      </div>
-
-      {error && (
-        <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-        <section className="space-y-6">
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-gray-900">Payment method</h2>
-
-            <div className="mt-5 space-y-3">
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4 hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="payment-provider"
-                  value="cash"
-                  checked={paymentProvider === 'cash'}
-                  onChange={() => setPaymentProvider('cash')}
-                  disabled={submitting}
-                  className="mt-1"
-                />
-
-                <span>
-                  <span className="block font-medium text-gray-900">Cash</span>
-                  <span className="mt-1 block text-sm text-gray-500">Pay for your order in cash.</span>
-                </span>
-              </label>
-
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4 hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="payment-provider"
-                  value="paymongo"
-                  checked={paymentProvider === 'paymongo'}
-                  onChange={() => setPaymentProvider('paymongo')}
-                  disabled={submitting}
-                  className="mt-1"
-                />
-
-                <span>
-                  <span className="block font-medium text-gray-900">PayMongo</span>
-                  <span className="mt-1 block text-sm text-gray-500">
-                    Continue to PayMongo to complete your payment.
-                  </span>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-gray-900">Items</h2>
-
-            <div className="mt-5 divide-y divide-gray-100">
-              {cart.items.map(item => (
-                <div key={item.id} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
-                  <div>
-                    <p className="font-medium text-gray-900">{item.coffee.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {item.quantity} × {currencyFormatter.format(item.coffee.price)}
-                    </p>
-                  </div>
-
-                  <p className="font-medium text-gray-900">{currencyFormatter.format(item.subtotal)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <aside className="h-fit rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="text-lg font-semibold text-gray-900">Order Summary</h2>
-
-          <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-5">
-            <span className="text-gray-600">Total</span>
-            <span className="text-xl font-semibold text-gray-900">{currencyFormatter.format(cart.total)}</span>
-          </div>
-
-          {hasUnavailableItem && (
-            <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-              One or more items are no longer available. Return to your cart and remove them before checking out.
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => void handleCheckout()}
-            disabled={submitting || hasUnavailableItem}
-            className="mt-6 w-full rounded-lg bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            {submitting
-              ? paymentProvider === 'paymongo'
-                ? 'Redirecting...'
-                : 'Placing order...'
-              : paymentProvider === 'paymongo'
-                ? 'Continue to PayMongo'
-                : 'Place order'}
-          </button>
-
-          <Link href="/cart" className="mt-3 block text-center text-sm font-medium text-gray-600 hover:text-gray-900">
-            Back to cart
-          </Link>
-        </aside>
-      </div>
-    </main>
-  );
+  return <CustomerCheckout key={customer.id} customerId={customer.id} accessToken={accessToken} />;
 }

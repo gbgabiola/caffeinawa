@@ -5,35 +5,27 @@ import { useEffect, useState } from 'react';
 
 import type { Cart } from '@caffeinawa/types';
 
-import { clearCart, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { clearCart, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
 });
 
-export default function CartPage() {
-  const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
+interface CustomerCartProps {
+  customerId: string;
+  accessToken: string;
+}
 
+function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
   const [cart, setCart] = useState<Cart | null>(null);
   const [loadingCart, setLoadingCart] = useState(true);
-  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
-  const [clearing, setClearing] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    if (!isAuthenticated || !customer || !accessToken) {
-      return;
-    }
-
-    const currentCustomer = customer;
-    const currentAccessToken = accessToken;
-
     let cancelled = false;
 
     async function loadCart() {
@@ -41,7 +33,7 @@ export default function CartPage() {
       setError(null);
 
       try {
-        const result = await getCart(currentAccessToken, currentCustomer.id);
+        const result = await getCart(accessToken, customerId);
 
         if (!cancelled) {
           setCart(result);
@@ -62,231 +54,282 @@ export default function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, customer, isAuthenticated, isLoading]);
+  }, [accessToken, customerId, refreshCount]);
 
   async function changeQuantity(itemId: string, quantity: number) {
-    if (!customer || !accessToken) {
-      return;
-    }
+    if (busyAction) return;
 
-    if (quantity < 1) {
-      await removeItem(itemId);
-      return;
-    }
-
-    setUpdatingItemId(itemId);
+    setBusyAction(itemId);
     setError(null);
 
     try {
-      const result = await updateCartItem(accessToken, customer.id, itemId, quantity);
+      const result =
+        quantity < 1
+          ? await removeCartItem(accessToken, customerId, itemId)
+          : await updateCartItem(accessToken, customerId, itemId, quantity);
 
       setCart(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update the cart item.');
     } finally {
-      setUpdatingItemId(null);
-    }
-  }
-
-  async function removeItem(itemId: string) {
-    if (!customer || !accessToken) {
-      return;
-    }
-
-    setUpdatingItemId(itemId);
-    setError(null);
-
-    try {
-      const result = await removeCartItem(accessToken, customer.id, itemId);
-
-      setCart(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to remove the cart item.');
-    } finally {
-      setUpdatingItemId(null);
+      setBusyAction(null);
     }
   }
 
   async function handleClearCart() {
-    if (!customer || !accessToken) {
-      return;
-    }
+    if (busyAction) return;
 
-    setClearing(true);
+    setBusyAction('clear');
     setError(null);
 
     try {
-      const result = await clearCart(accessToken, customer.id);
-      setCart(result);
+      setCart(await clearCart(accessToken, customerId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to clear your cart.');
     } finally {
-      setClearing(false);
+      setBusyAction(null);
     }
   }
 
-  if (isLoading || loadingCart) {
+  const items = cart?.items ?? [];
+  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
+  const isBusy = busyAction !== null;
+  const hasUnavailableItem = items.some(item => !item.coffee.available);
+  const cannotCheckout = isBusy || hasUnavailableItem;
+
+  return (
+    <main className="flex-1 bg-cafe-cream text-cafe-espresso">
+      <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
+        <Link
+          href="/menu"
+          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-cafe-muted hover:text-cafe-espresso"
+        >
+          <span aria-hidden="true">←</span>
+          Back to the menu
+        </Link>
+
+        <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">Your coffee moment</p>
+
+            <h1 className="mt-3 font-display text-4xl tracking-[-0.04em] sm:text-5xl">A little cup of happy.</h1>
+
+            <p className="mt-3 text-sm leading-7 text-cafe-muted">Review your drinks before heading to checkout.</p>
+          </div>
+
+          {!loadingCart && items.length > 0 && (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => void handleClearCart()}
+              className="min-h-11 text-sm font-medium text-cafe-muted underline underline-offset-4 hover:text-cafe-espresso disabled:opacity-50"
+            >
+              {busyAction === 'clear' ? 'Clearing...' : 'Clear cart'}
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        {loadingCart ? (
+          <p
+            role="status"
+            className="mt-8 rounded-2xl border border-cafe-border bg-cafe-paper px-6 py-14 text-center text-sm text-cafe-muted"
+          >
+            Loading your cart...
+          </p>
+        ) : !cart ? (
+          <section className="mt-8 rounded-2xl border border-cafe-border bg-cafe-paper p-8 text-center">
+            <h2 className="font-display text-2xl">We couldn&apos;t open your cart</h2>
+
+            <button
+              type="button"
+              onClick={() => setRefreshCount(count => count + 1)}
+              className="mt-5 min-h-12 rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+            >
+              Try again
+            </button>
+          </section>
+        ) : items.length === 0 ? (
+          <section className="mt-8 rounded-3xl border border-cafe-border bg-cafe-paper px-6 py-16 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">
+              Room for something good
+            </p>
+
+            <h2 className="mt-4 font-display text-3xl">Your cart is waiting.</h2>
+
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-cafe-muted">
+              Explore the menu and add something you&apos;ll look forward to.
+            </p>
+
+            <Link
+              href="/menu"
+              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            >
+              Explore the menu
+            </Link>
+          </section>
+        ) : (
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <section aria-label="Cart items" className="space-y-4">
+              {items.map(item => {
+                const updating = busyAction === item.id;
+
+                return (
+                  <article key={item.id} className="rounded-2xl border border-cafe-border bg-cafe-paper p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h2 className="break-words font-display text-2xl tracking-tight">{item.coffee.name}</h2>
+
+                        <p className="mt-2 text-sm text-cafe-muted">
+                          {currencyFormatter.format(item.coffee.price)} per drink
+                        </p>
+
+                        {!item.coffee.available && (
+                          <p className="mt-3 text-sm font-medium text-red-700">Currently unavailable</p>
+                        )}
+                      </div>
+
+                      <p className="shrink-0 text-lg font-semibold tabular-nums">
+                        {currencyFormatter.format(item.subtotal)}
+                      </p>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between gap-4 border-t border-cafe-border pt-4">
+                      <div
+                        role="group"
+                        aria-label={`Quantity for ${item.coffee.name}`}
+                        aria-busy={updating}
+                        className="flex items-center rounded-full border border-cafe-border bg-cafe-cream"
+                      >
+                        <button
+                          type="button"
+                          aria-label={`Decrease quantity of ${item.coffee.name}`}
+                          disabled={isBusy}
+                          onClick={() => void changeQuantity(item.id, item.quantity - 1)}
+                          className="flex h-11 w-11 items-center justify-center rounded-full text-xl hover:bg-cafe-soft disabled:opacity-40"
+                        >
+                          <span aria-hidden="true">−</span>
+                        </button>
+
+                        <span aria-live="polite" className="min-w-9 text-center text-sm font-semibold tabular-nums">
+                          {updating ? '…' : item.quantity}
+                        </span>
+
+                        <button
+                          type="button"
+                          aria-label={`Increase quantity of ${item.coffee.name}`}
+                          disabled={isBusy || !item.coffee.available}
+                          onClick={() => void changeQuantity(item.id, item.quantity + 1)}
+                          className="flex h-11 w-11 items-center justify-center rounded-full text-xl hover:bg-cafe-soft disabled:opacity-40"
+                        >
+                          <span aria-hidden="true">+</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void changeQuantity(item.id, 0)}
+                        className="min-h-11 text-sm text-cafe-muted underline underline-offset-4 hover:text-red-700 disabled:opacity-40"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+
+            <aside
+              aria-labelledby="cart-summary-heading"
+              className="rounded-2xl border border-cafe-border bg-cafe-paper p-6 lg:sticky lg:top-6"
+            >
+              <h2 id="cart-summary-heading" className="font-display text-2xl">
+                Your order
+              </h2>
+
+              <div className="mt-5 flex justify-between gap-4 text-sm text-cafe-muted">
+                <span>Drinks</span>
+                <span>{itemCount}</span>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between gap-4 border-t border-cafe-border pt-5">
+                <span className="font-medium">Total</span>
+                <span className="text-2xl font-semibold tabular-nums">{currencyFormatter.format(cart.total)}</span>
+              </div>
+
+              {hasUnavailableItem && (
+                <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
+                  Remove unavailable drinks before continuing.
+                </p>
+              )}
+
+              <Link
+                href="/checkout"
+                aria-disabled={cannotCheckout}
+                tabIndex={cannotCheckout ? -1 : undefined}
+                onClick={event => {
+                  if (cannotCheckout) event.preventDefault();
+                }}
+                className={`mt-6 flex min-h-12 items-center justify-center rounded-full px-5 text-sm font-semibold ${
+                  cannotCheckout
+                    ? 'cursor-not-allowed bg-cafe-soft text-cafe-muted'
+                    : 'bg-cafe-espresso text-white hover:bg-cafe-brown'
+                }`}
+              >
+                Continue to checkout
+              </Link>
+
+              <Link
+                href="/menu"
+                className="mt-3 flex min-h-11 items-center justify-center text-sm font-medium text-cafe-muted hover:text-cafe-espresso"
+              >
+                Add another favorite
+              </Link>
+            </aside>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+export default function CartPage() {
+  const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
     return (
-      <main className="mx-auto w-full max-w-5xl px-6 py-12">
-        <p className="text-sm text-gray-500">Loading your cart...</p>
+      <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16">
+        <p role="status" className="text-sm text-cafe-muted">
+          Checking your session...
+        </p>
       </main>
     );
   }
 
   if (!isAuthenticated || !customer || !accessToken) {
     return (
-      <main className="mx-auto w-full max-w-5xl px-6 py-12">
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
-          <h1 className="text-2xl font-semibold text-gray-900">Sign in to view your cart</h1>
+      <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16 text-cafe-espresso">
+        <section className="w-full max-w-lg rounded-3xl border border-cafe-border bg-cafe-paper p-8 text-center">
+          <h1 className="font-display text-3xl">Sign in to view your cart</h1>
 
-          <p className="mt-2 text-gray-600">You need an account before you can place an order.</p>
+          <p className="mt-4 text-sm leading-7 text-cafe-muted">Your next coffee moment starts with your account.</p>
 
           <Link
             href="/login"
-            className="mt-6 inline-block rounded-lg bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-700"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
           >
             Sign in
           </Link>
-        </div>
+        </section>
       </main>
     );
   }
 
-  const items = cart?.items ?? [];
-  const hasUnavailableItem = items.some(item => !item.coffee.available);
-
-  return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold text-gray-900">Your Cart</h1>
-          <p className="mt-1 text-gray-600">Review your coffee before checkout.</p>
-        </div>
-
-        {items.length > 0 && (
-          <button
-            type="button"
-            onClick={handleClearCart}
-            disabled={clearing}
-            className="text-sm font-medium text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {clearing ? 'Clearing...' : 'Clear cart'}
-          </button>
-        )}
-      </div>
-
-      {error && (
-        <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {items.length === 0 ? (
-        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-10 text-center">
-          <h2 className="text-xl font-semibold text-gray-900">Your cart is empty</h2>
-
-          <p className="mt-2 text-gray-600">Add something from our coffee menu to get started.</p>
-
-          <Link
-            href="/menu"
-            className="mt-6 inline-block rounded-lg bg-gray-900 px-5 py-3 text-sm font-medium text-white hover:bg-gray-700"
-          >
-            Browse coffee
-          </Link>
-        </div>
-      ) : (
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-          <section className="space-y-4">
-            {items.map(item => {
-              const updating = updatingItemId === item.id;
-
-              return (
-                <article key={item.id} className="rounded-xl border border-gray-200 bg-white p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <h2 className="font-semibold text-gray-900">{item.coffee.name}</h2>
-
-                      <p className="mt-1 text-sm text-gray-500">{currencyFormatter.format(item.coffee.price)} each</p>
-
-                      {!item.coffee.available && (
-                        <p className="mt-2 text-sm font-medium text-red-600">Currently unavailable</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-5 sm:justify-end">
-                      <div className="flex items-center rounded-lg border border-gray-200">
-                        <button
-                          type="button"
-                          aria-label={`Decrease quantity of ${item.coffee.name}`}
-                          disabled={updating}
-                          onClick={() => void changeQuantity(item.id, item.quantity - 1)}
-                          className="px-3 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          −
-                        </button>
-
-                        <span className="min-w-10 text-center text-sm font-medium">{item.quantity}</span>
-
-                        <button
-                          type="button"
-                          aria-label={`Increase quantity of ${item.coffee.name}`}
-                          disabled={updating}
-                          onClick={() => void changeQuantity(item.id, item.quantity + 1)}
-                          className="px-3 py-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <p className="min-w-24 text-right font-semibold text-gray-900">
-                        {currencyFormatter.format(item.subtotal)}
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={() => void removeItem(item.id)}
-                        disabled={updating}
-                        className="text-sm text-gray-500 hover:text-red-600 disabled:opacity-50"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-
-          <aside className="h-fit rounded-xl border border-gray-200 bg-white p-6">
-            <h2 className="text-lg font-semibold text-gray-900">Order Summary</h2>
-
-            <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-5">
-              <span className="text-gray-600">Total</span>
-              <span className="text-xl font-semibold text-gray-900">{currencyFormatter.format(cart?.total ?? 0)}</span>
-            </div>
-
-            {hasUnavailableItem && (
-              <p className="mt-4 text-sm text-red-600">Remove unavailable items before proceeding to checkout.</p>
-            )}
-
-            <Link
-              href="/checkout"
-              aria-disabled={hasUnavailableItem}
-              className={`mt-6 block rounded-lg px-5 py-3 text-center text-sm font-medium ${
-                hasUnavailableItem
-                  ? 'pointer-events-none bg-gray-200 text-gray-400'
-                  : 'bg-gray-900 text-white hover:bg-gray-700'
-              }`}
-            >
-              Proceed to checkout
-            </Link>
-
-            <Link href="/menu" className="mt-3 block text-center text-sm font-medium text-gray-600 hover:text-gray-900">
-              Continue shopping
-            </Link>
-          </aside>
-        </div>
-      )}
-    </main>
-  );
+  return <CustomerCart key={customer.id} customerId={customer.id} accessToken={accessToken} />;
 }
