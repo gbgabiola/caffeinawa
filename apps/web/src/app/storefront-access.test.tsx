@@ -34,15 +34,17 @@ const pages = [
     name: 'Cart',
     Page: CartPage,
     heading: 'Sign in to view your cart',
+    signInHref: '/login?next=%2Fcart',
   },
   {
     name: 'Checkout',
     Page: CheckoutPage,
     heading: 'Sign in to checkout',
+    signInHref: '/login?next=%2Fcheckout',
   },
 ];
 
-describe.each(pages)('$name authentication', ({ Page, heading }) => {
+describe.each(pages)('$name authentication', ({ Page, heading, signInHref }) => {
   beforeEach(() => {
     mocks.getCart.mockReset();
     mocks.replace.mockReset();
@@ -60,7 +62,7 @@ describe.each(pages)('$name authentication', ({ Page, heading }) => {
 
     expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', signInHref);
 
     expect(mocks.getCart).not.toHaveBeenCalled();
   });

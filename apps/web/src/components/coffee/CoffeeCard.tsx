@@ -112,7 +112,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
 
   async function handleIncrement() {
     if (!isAuthenticated || !customer || !accessToken) {
-      router.push('/login');
+      router.push('/login?next=%2Fmenu');
       return;
     }
 
@@ -134,7 +134,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
 
   async function handleDecrement() {
     if (!isAuthenticated || !customer || !accessToken) {
-      router.push('/login');
+      router.push('/login?next=%2Fmenu');
       return;
     }
 

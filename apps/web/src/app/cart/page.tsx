@@ -321,7 +321,7 @@ export default function CartPage() {
           <p className="mt-4 text-sm leading-7 text-cafe-muted">Your next coffee moment starts with your account.</p>
 
           <Link
-            href="/login"
+            href="/login?next=%2Fcart"
             className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
           >
             Sign in

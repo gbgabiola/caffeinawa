@@ -291,6 +291,8 @@ function SuccessContent() {
     );
   }
 
+  const signInHref = `/login?next=${encodeURIComponent(`/checkout/success?orderId=${encodeURIComponent(orderId)}`)}`;
+
   if (!isAuthenticated || !customer || !accessToken) {
     return (
       <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-16 text-cafe-espresso">
@@ -298,11 +300,11 @@ function SuccessContent() {
           <h1 className="font-display text-3xl">Sign in to check your order</h1>
 
           <p className="mt-4 text-sm leading-7 text-cafe-muted">
-            Use the account that placed this order. After signing in, reopen this order-status link.
+            Sign in with the account that placed this order to continue.
           </p>
 
           <Link
-            href="/login"
+            href={signInHref}
             className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
           >
             Sign in
