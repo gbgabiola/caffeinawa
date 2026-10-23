@@ -15,11 +15,19 @@ export default function FormField({ htmlFor, label, description, error, children
         {label}
       </label>
 
-      {description && <p className="mt-1 text-xs text-gray-500">{description}</p>}
+      {description && (
+        <p id={`${htmlFor}-description`} className="mt-1 text-xs text-gray-500">
+          {description}
+        </p>
+      )}
 
       {children}
 
-      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+      {error && (
+        <p id={`${htmlFor}-error`} role="alert" className="mt-1.5 text-xs text-red-600">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -131,15 +131,11 @@ function RegisterContent() {
             minLength={8}
             maxLength={128}
             disabled={isSubmitting}
-            aria-describedby="password-guidance"
+            aria-describedby="password-description"
             value={password}
             onChange={event => setPassword(event.target.value)}
             className={inputClassName}
           />
-
-          <span id="password-guidance" className="sr-only">
-            Use between 8 and 128 characters.
-          </span>
         </FormField>
 
         <FormField htmlFor="confirmPassword" label="Confirm password">
