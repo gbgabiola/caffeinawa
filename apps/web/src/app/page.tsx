@@ -1,6 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
+import HomeAccountPrompt from '@/components/auth/HomeAccountPrompt';
+
 const orderingSteps = [
   {
     number: '01',
@@ -144,16 +146,7 @@ export default function HomePage() {
             ))}
           </ol>
 
-          <p className="mt-6 text-sm leading-6 text-cafe-muted">
-            Already have an account?{' '}
-            <Link
-              href="/login"
-              className="inline-block py-2 font-semibold text-cafe-accent underline underline-offset-4"
-            >
-              Sign in
-            </Link>{' '}
-            when you&apos;re ready to order.
-          </p>
+          <HomeAccountPrompt />
         </div>
       </section>
 
