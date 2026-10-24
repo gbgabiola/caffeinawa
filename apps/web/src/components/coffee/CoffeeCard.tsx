@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/AuthProvider';
-import { addCartItem, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
+import { useMenuCart } from '@/hooks/useMenuCart';
 
 import type { Coffee } from '@caffeinawa/types';
 
@@ -64,51 +64,18 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
   const router = useRouter();
   const { customer, accessToken, isAuthenticated } = useAuth();
 
-  const [quantity, setQuantity] = useState(0);
-  const [loadingCart, setLoadingCart] = useState(false);
-  const [updating, setUpdating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    cart,
+    isLoading: loadingCart,
+    isUpdating: updating,
+    error: cartError,
+    addCoffee,
+    decreaseCoffee,
+  } = useMenuCart();
 
-  useEffect(() => {
-    if (!isAuthenticated || !customer || !accessToken) {
-      return;
-    }
+  const quantity = cart?.items.find(item => item.coffeeId === coffee.id)?.quantity ?? 0;
 
-    const currentCustomer = customer;
-    const currentAccessToken = accessToken;
-    let cancelled = false;
-
-    async function loadCart() {
-      setLoadingCart(true);
-      setError(null);
-
-      try {
-        const cart = await getCart(currentAccessToken, currentCustomer.id);
-
-        if (cancelled) {
-          return;
-        }
-
-        const cartItem = cart.items.find(item => item.coffeeId === coffee.id);
-
-        setQuantity(cartItem?.quantity ?? 0);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Unable to load your cart.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingCart(false);
-        }
-      }
-    }
-
-    void loadCart();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, coffee.id, customer, isAuthenticated]);
+  const error = cartError?.message ?? null;
 
   async function handleIncrement() {
     if (!isAuthenticated || !customer || !accessToken) {
@@ -116,19 +83,14 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
       return;
     }
 
-    setUpdating(true);
-    setError(null);
+    if (loadingCart || updating || !coffee.available) {
+      return;
+    }
 
     try {
-      const cart = await addCartItem(accessToken, customer.id, coffee.id);
-
-      const cartItem = cart.items.find(item => item.coffeeId === coffee.id);
-
-      setQuantity(cartItem?.quantity ?? 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to add item.');
-    } finally {
-      setUpdating(false);
+      await addCoffee(coffee.id);
+    } catch {
+      // The mutation error is displayed through useMenuCart.
     }
   }
 
@@ -138,35 +100,14 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
       return;
     }
 
-    if (updating || loadingCart || quantity < 1) {
+    if (loadingCart || updating || quantity < 1) {
       return;
     }
 
-    setUpdating(true);
-    setError(null);
-
     try {
-      const currentCart = await getCart(accessToken, customer.id);
-
-      const currentItem = currentCart.items.find(item => item.coffeeId === coffee.id);
-
-      if (!currentItem) {
-        setQuantity(0);
-        return;
-      }
-
-      const updatedCart =
-        currentItem.quantity === 1
-          ? await removeCartItem(accessToken, customer.id, currentItem.id)
-          : await updateCartItem(accessToken, customer.id, currentItem.id, currentItem.quantity - 1);
-
-      const updatedItem = updatedCart.items.find(item => item.coffeeId === coffee.id);
-
-      setQuantity(updatedItem?.quantity ?? 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to reduce item count.');
-    } finally {
-      setUpdating(false);
+      await decreaseCoffee(coffee.id);
+    } catch {
+      // The mutation error is displayed through useMenuCart.
     }
   }
 

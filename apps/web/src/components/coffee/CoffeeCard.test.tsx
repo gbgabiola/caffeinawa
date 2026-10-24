@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Cart, Coffee } from '@caffeinawa/types';
-
 import { CoffeeCard } from './CoffeeCard';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { Cart, Coffee } from '@caffeinawa/types';
+import type { ReactNode } from 'react';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -76,12 +78,29 @@ function makeCart(quantity: number): Cart {
   };
 }
 
+function renderWithCart(ui: ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  });
+
+  return {
+    user: userEvent.setup(),
+    ...render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>),
+  };
+}
+
 async function renderLoadedCard(quantity: number) {
   mocks.getCart.mockResolvedValue(makeCart(quantity));
 
-  const user = userEvent.setup();
-
-  render(<CoffeeCard coffee={coffee} />);
+  const { user } = renderWithCart(<CoffeeCard coffee={coffee} />);
 
   await screen.findByRole('button', {
     name: 'Decrease quantity',
@@ -204,6 +223,123 @@ describe('CoffeeCard decrement', () => {
       expect(mocks.updateCartItem).toHaveBeenCalledExactlyOnceWith('customer-token', 'customer-1', 'cart-item-1', 3);
 
       expect(screen.getByText('3')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('CoffeeCard shared cart', () => {
+  beforeEach(() => {
+    mocks.getCart.mockReset();
+    mocks.addCartItem.mockReset();
+    mocks.updateCartItem.mockReset();
+    mocks.removeCartItem.mockReset();
+    mocks.push.mockReset();
+  });
+
+  it('loads one cart for multiple menu cards', async () => {
+    mocks.getCart.mockResolvedValue(makeCart(2));
+
+    const otherCoffee: Coffee = {
+      ...coffee,
+      id: 'coffee-2',
+      name: 'Cold Brew',
+      category: 'cold_brew',
+    };
+
+    renderWithCart(
+      <>
+        <CoffeeCard coffee={coffee} />
+        <CoffeeCard coffee={otherCoffee} />
+      </>,
+    );
+
+    await screen.findByRole('button', {
+      name: 'Decrease quantity',
+    });
+
+    await screen.findByRole('button', {
+      name: 'Add to cart',
+    });
+
+    expect(mocks.getCart).toHaveBeenCalledExactlyOnceWith('customer-token', 'customer-1');
+  });
+
+  it('updates every view of a coffee from the returned cart', async () => {
+    mocks.getCart.mockResolvedValue(makeCart(2));
+    mocks.updateCartItem.mockResolvedValue(makeCart(1));
+
+    const { user } = renderWithCart(
+      <>
+        <CoffeeCard coffee={coffee} />
+        <CoffeeCard coffee={coffee} />
+      </>,
+    );
+
+    const decreaseButtons = await screen.findAllByRole('button', { name: 'Decrease quantity' });
+
+    await user.click(decreaseButtons[0]);
+
+    await waitFor(() => {
+      const cards = screen.getAllByRole('article');
+
+      expect(within(cards[0]).getByText('1')).toBeInTheDocument();
+
+      expect(within(cards[1]).getByText('1')).toBeInTheDocument();
+    });
+
+    expect(mocks.updateCartItem).toHaveBeenCalledExactlyOnceWith('customer-token', 'customer-1', 'cart-item-1', 1);
+  });
+
+  it('disables controls across cards while an update is pending', async () => {
+    mocks.getCart.mockResolvedValue(makeCart(2));
+
+    let finishUpdate: (cart: Cart) => void = () => {
+      throw new Error('Update resolver was not initialized.');
+    };
+
+    mocks.updateCartItem.mockReturnValueOnce(
+      new Promise<Cart>(resolve => {
+        finishUpdate = resolve;
+      }),
+    );
+
+    const { user } = renderWithCart(
+      <>
+        <CoffeeCard coffee={coffee} />
+        <CoffeeCard coffee={coffee} />
+      </>,
+    );
+
+    const decreaseButtons = await screen.findAllByRole('button', { name: 'Decrease quantity' });
+
+    await user.click(decreaseButtons[0]);
+
+    await waitFor(() => {
+      expect(mocks.updateCartItem).toHaveBeenCalledTimes(1);
+    });
+
+    for (const button of screen.getAllByRole('button', {
+      name: 'Decrease quantity',
+    })) {
+      expect(button).toBeDisabled();
+    }
+
+    for (const button of screen.getAllByRole('button', {
+      name: 'Increase quantity',
+    })) {
+      expect(button).toBeDisabled();
+    }
+
+    await act(async () => {
+      finishUpdate(makeCart(1));
+    });
+
+    await waitFor(() => {
+      for (const button of screen.getAllByRole('button', {
+        name: 'Decrease quantity',
+      })) {
+        expect(button).toBeEnabled();
+      }
     });
   });
 });
