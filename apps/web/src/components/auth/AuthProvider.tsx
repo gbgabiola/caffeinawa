@@ -6,8 +6,8 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useSyncExternalStore,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 
@@ -16,11 +16,11 @@ import type { Customer } from '@caffeinawa/types';
 import {
   getCurrentCustomer,
   login as loginApi,
-  type LoginInput,
-  type LoginCustomer,
-  type RegisterInput,
   register as registerApi,
   updateCurrentCustomer,
+  type LoginCustomer,
+  type LoginInput,
+  type RegisterInput,
   type UpdateCustomerInput,
 } from '@/lib/api/auth';
 
@@ -37,36 +37,57 @@ interface AuthContextValue {
   updateCustomer: (input: UpdateCustomerInput) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-interface AuthProviderProps {
-  children: ReactNode;
+interface SessionState {
+  token: string | null;
+  customer: LoginCustomer | null;
+  resolved: boolean;
 }
 
-let accessToken: string | null = null;
+const EMPTY_SESSION: SessionState = {
+  token: null,
+  customer: null,
+  resolved: true,
+};
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
 const listeners = new Set<() => void>();
 
 function subscribe(callback: () => void) {
   listeners.add(callback);
 
-  window.addEventListener('storage', callback);
+  function handleStorage(event: StorageEvent) {
+    if (event.key === ACCESS_TOKEN_KEY || event.key === null) {
+      callback();
+    }
+  }
+
+  window.addEventListener('storage', handleStorage);
 
   return () => {
     listeners.delete(callback);
-    window.removeEventListener('storage', callback);
+    window.removeEventListener('storage', handleStorage);
   };
 }
 
 function getSnapshot() {
-  if (accessToken === null) {
-    accessToken = window.localStorage.getItem(ACCESS_TOKEN_KEY);
-  }
-
-  return accessToken;
+  // Always read the current value, including changes from other tabs.
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
 function getServerSnapshot() {
   return null;
+}
+
+function setAccessToken(token: string | null) {
+  if (token) {
+    window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  } else {
+    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+
+  // Native storage events do not fire in the tab making the change.
+  listeners.forEach(listener => listener());
 }
 
 let authHydrated = false;
@@ -88,58 +109,49 @@ function getServerHydrationSnapshot() {
   return false;
 }
 
-function setAccessToken(token: string | null) {
-  accessToken = token;
-
-  if (token) {
-    window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
-  } else {
-    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  }
-
-  listeners.forEach(listener => listener());
+interface AuthProviderProps {
+  children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const token = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const [customer, setCustomer] = useState<LoginCustomer | null>(null);
-  const [sessionResolved, setSessionResolved] = useState(false);
-
   const isAuthHydrated = useSyncExternalStore(subscribeHydration, getHydrationSnapshot, getServerHydrationSnapshot);
 
+  const [session, setSession] = useState<SessionState>(EMPTY_SESSION);
+
   useEffect(() => {
-    if (authHydrated) {
-      return;
-    }
+    if (authHydrated) return;
 
     authHydrated = true;
+
     hydrationListeners.forEach(listener => listener());
   }, []);
 
   useEffect(() => {
-    if (token === null) {
-      return;
-    }
+    if (token === null) return;
 
     let cancelled = false;
 
+    function isCurrentRequest() {
+      return !cancelled && getSnapshot() === token;
+    }
+
     getCurrentCustomer(token)
-      .then(currentCustomer => {
-        if (!cancelled) {
-          setCustomer(currentCustomer);
-        }
+      .then(customer => {
+        if (!isCurrentRequest()) return;
+
+        setSession({
+          token,
+          customer,
+          resolved: true,
+        });
       })
       .catch(() => {
-        if (!cancelled) {
-          setAccessToken(null);
-          setCustomer(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSessionResolved(true);
-        }
+        if (!isCurrentRequest()) return;
+
+        setAccessToken(null);
+        setSession(EMPTY_SESSION);
       });
 
     return () => {
@@ -151,8 +163,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const response = await loginApi(input);
 
     setAccessToken(response.accessToken);
-    setCustomer(response.customer);
-    setSessionResolved(true);
+
+    setSession({
+      token: response.accessToken,
+      customer: response.customer,
+      resolved: true,
+    });
   }, []);
 
   const register = useCallback(async (input: RegisterInput) => {
@@ -161,8 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     setAccessToken(null);
-    setCustomer(null);
-    setSessionResolved(true);
+    setSession(EMPTY_SESSION);
   }, []);
 
   const updateCustomer = useCallback(
@@ -173,19 +188,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const updatedCustomer = await updateCurrentCustomer(token, input);
 
-      setCustomer(currentCustomer =>
-        currentCustomer
+      setSession(current =>
+        current.token === token && current.customer
           ? {
-              ...currentCustomer,
-              ...updatedCustomer,
+              ...current,
+              customer: {
+                ...current.customer,
+                ...updatedCustomer,
+              },
             }
-          : null,
+          : current,
       );
     },
     [token],
   );
 
-  const isLoading = !isAuthHydrated || (token !== null && !sessionResolved);
+  // Customer data belongs only to the token that loaded it.
+  const customer = token !== null && session.token === token ? session.customer : null;
+
+  const sessionResolved = token === null || (session.token === token && session.resolved);
+
+  const isLoading = !isAuthHydrated || !sessionResolved;
 
   const value = useMemo<AuthContextValue>(
     () => ({
