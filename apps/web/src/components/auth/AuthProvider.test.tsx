@@ -1,4 +1,5 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,13 +9,14 @@ const TOKEN_KEY = 'caffeinawa_access_token';
 
 const mocks = vi.hoisted(() => ({
   getCurrentCustomer: vi.fn(),
+  updateCurrentCustomer: vi.fn(),
 }));
 
 vi.mock('@/lib/api/auth', () => ({
   getCurrentCustomer: mocks.getCurrentCustomer,
   login: vi.fn(),
   register: vi.fn(),
-  updateCurrentCustomer: vi.fn(),
+  updateCurrentCustomer: mocks.updateCurrentCustomer,
 }));
 
 const firstCustomer = {
@@ -32,13 +34,30 @@ const secondCustomer = {
 };
 
 function SessionProbe() {
-  const { customer, isLoading } = useAuth();
+  const { customer, isLoading, updateCustomer } = useAuth();
 
   if (isLoading) {
     return <p role="status">Loading session...</p>;
   }
 
-  return <p>{customer?.name ?? 'Signed out'}</p>;
+  return (
+    <>
+      <p>{customer?.name ?? 'Signed out'}</p>
+
+      {customer && (
+        <button
+          type="button"
+          onClick={() =>
+            void updateCustomer({
+              name: 'Updated Customer',
+            })
+          }
+        >
+          Save profile
+        </button>
+      )}
+    </>
+  );
 }
 
 function renderSession() {
@@ -71,6 +90,7 @@ function changeTokenFromAnotherTab(token: string | null) {
 beforeEach(() => {
   window.localStorage.clear();
   mocks.getCurrentCustomer.mockReset();
+  mocks.updateCurrentCustomer.mockReset();
 });
 
 describe('AuthProvider session synchronization', () => {
@@ -166,5 +186,73 @@ describe('AuthProvider session synchronization', () => {
     expect(screen.getByText('Customer Two')).toBeInTheDocument();
 
     expect(screen.queryByText('Customer One')).not.toBeInTheDocument();
+  });
+
+  it('reloads the customer when another tab announces a profile update', async () => {
+    window.localStorage.setItem(TOKEN_KEY, 'token-one');
+
+    mocks.getCurrentCustomer.mockResolvedValueOnce(firstCustomer).mockResolvedValueOnce({
+      ...firstCustomer,
+      name: 'Updated Customer',
+    });
+
+    renderSession();
+
+    await screen.findByText('Customer One');
+
+    act(() => {
+      window.localStorage.setItem('caffeinawa_profile_updated', 'test-profile-update');
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'caffeinawa_profile_updated',
+          newValue: 'test-profile-update',
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    expect(await screen.findByText('Updated Customer')).toBeInTheDocument();
+
+    expect(mocks.getCurrentCustomer).toHaveBeenCalledTimes(2);
+
+    expect(window.localStorage.getItem(TOKEN_KEY)).toBe('token-one');
+  });
+
+  it('updates the current customer and publishes a profile notification after saving', async () => {
+    window.localStorage.setItem(TOKEN_KEY, 'token-one');
+
+    mocks.getCurrentCustomer.mockResolvedValue(firstCustomer);
+
+    mocks.updateCurrentCustomer.mockResolvedValue({
+      ...firstCustomer,
+      name: 'Updated Customer',
+    });
+
+    const user = userEvent.setup();
+
+    renderSession();
+
+    await screen.findByText('Customer One');
+
+    const storageSpy = vi.spyOn(Storage.prototype, 'setItem');
+
+    try {
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Save profile',
+        }),
+      );
+
+      expect(await screen.findByText('Updated Customer')).toBeInTheDocument();
+
+      expect(mocks.updateCurrentCustomer).toHaveBeenCalledExactlyOnceWith('token-one', { name: 'Updated Customer' });
+
+      await waitFor(() => {
+        expect(storageSpy).toHaveBeenCalledWith('caffeinawa_profile_updated', expect.any(String));
+      });
+    } finally {
+      storageSpy.mockRestore();
+    }
   });
 });

@@ -25,6 +25,7 @@ import {
 } from '@/lib/api/auth';
 
 const ACCESS_TOKEN_KEY = 'caffeinawa_access_token';
+const PROFILE_UPDATED_KEY = 'caffeinawa_profile_updated';
 
 interface AuthContextValue {
   customer: LoginCustomer | null;
@@ -119,6 +120,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isAuthHydrated = useSyncExternalStore(subscribeHydration, getHydrationSnapshot, getServerHydrationSnapshot);
 
   const [session, setSession] = useState<SessionState>(EMPTY_SESSION);
+  const [profileRefreshVersion, setProfileRefreshVersion] = useState(0);
 
   useEffect(() => {
     if (authHydrated) return;
@@ -127,6 +129,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     hydrationListeners.forEach(listener => listener());
   }, []);
+
+  useEffect(() => {
+    function handleProfileUpdated(event: StorageEvent) {
+      if (event.key !== PROFILE_UPDATED_KEY || event.newValue === null || token === null || getSnapshot() !== token) {
+        return;
+      }
+
+      setProfileRefreshVersion(version => version + 1);
+    }
+
+    window.addEventListener('storage', handleProfileUpdated);
+
+    return () => {
+      window.removeEventListener('storage', handleProfileUpdated);
+    };
+  }, [token]);
 
   useEffect(() => {
     if (token === null) return;
@@ -157,7 +175,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, profileRefreshVersion]);
 
   const login = useCallback(async (input: LoginInput) => {
     const response = await loginApi(input);
@@ -188,6 +206,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const updatedCustomer = await updateCurrentCustomer(token, input);
 
+      // The active account may have changed while saving.
+      if (getSnapshot() !== token) {
+        return;
+      }
+
       setSession(current =>
         current.token === token && current.customer
           ? {
@@ -199,6 +222,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
           : current,
       );
+
+      try {
+        window.localStorage.setItem(PROFILE_UPDATED_KEY, window.crypto.randomUUID());
+      } catch {
+        // The server save succeeded. A notification failure must
+        // not report that the profile update itself failed.
+      }
     },
     [token],
   );
