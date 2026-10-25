@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import SessionNotice from '@/components/auth/SessionNotice';
 import { Header } from '@/components/layout/Header';
 
 import './globals.css';
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           </a>
 
           <Header />
+          <SessionNotice />
 
           <div
             id="page-content"

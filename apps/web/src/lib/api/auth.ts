@@ -2,6 +2,16 @@ import type { Customer } from '@caffeinawa/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
+export class AuthRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AuthRequestError';
+  }
+}
+
 export interface RegisterInput {
   name: string;
   email: string;
@@ -64,10 +74,16 @@ export async function getCurrentCustomer(accessToken: string): Promise<LoginCust
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+    cache: 'no-store',
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch current customer');
+    throw new AuthRequestError(
+      response.status,
+      response.status === 401
+        ? 'Your session has expired. Please sign in again.'
+        : 'Unable to check your account right now.',
+    );
   }
 
   return response.json();

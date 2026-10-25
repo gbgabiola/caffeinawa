@@ -14,6 +14,7 @@ import {
 import type { Customer } from '@caffeinawa/types';
 
 import {
+  AuthRequestError,
   getCurrentCustomer,
   login as loginApi,
   register as registerApi,
@@ -32,10 +33,12 @@ interface AuthContextValue {
   accessToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  sessionError: string | null;
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<Customer>;
   logout: () => void;
   updateCustomer: (input: UpdateCustomerInput) => Promise<void>;
+  retrySession: () => void;
 }
 
 interface SessionState {
@@ -121,6 +124,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const [session, setSession] = useState<SessionState>(EMPTY_SESSION);
   const [profileRefreshVersion, setProfileRefreshVersion] = useState(0);
+  const [sessionFailure, setSessionFailure] = useState<{
+    token: string;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     if (authHydrated) return;
@@ -164,12 +171,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
           customer,
           resolved: true,
         });
+
+        setSessionFailure(null);
       })
-      .catch(() => {
+      .catch(error => {
         if (!isCurrentRequest()) return;
 
-        setAccessToken(null);
-        setSession(EMPTY_SESSION);
+        if (error instanceof AuthRequestError && error.status === 401) {
+          setAccessToken(null);
+          setSession(EMPTY_SESSION);
+          setSessionFailure(null);
+          return;
+        }
+
+        setSessionFailure({
+          token,
+          message: "We couldn't check your account. Please try again.",
+        });
       });
 
     return () => {
@@ -177,10 +195,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [token, profileRefreshVersion]);
 
+  const retrySession = useCallback(() => {
+    setSessionFailure(null);
+    setProfileRefreshVersion(version => version + 1);
+  }, []);
+
   const login = useCallback(async (input: LoginInput) => {
     const response = await loginApi(input);
 
     setAccessToken(response.accessToken);
+    setSessionFailure(null);
 
     setSession({
       token: response.accessToken,
@@ -196,6 +220,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(() => {
     setAccessToken(null);
     setSession(EMPTY_SESSION);
+    setSessionFailure(null);
   }, []);
 
   const updateCustomer = useCallback(
@@ -240,18 +265,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const isLoading = !isAuthHydrated || !sessionResolved;
 
+  const sessionError = token !== null && sessionFailure?.token === token ? sessionFailure.message : null;
+
   const value = useMemo<AuthContextValue>(
     () => ({
       customer,
       accessToken: token,
       isLoading,
       isAuthenticated: customer !== null,
+      sessionError,
+      retrySession,
       login,
       register,
       logout,
       updateCustomer,
     }),
-    [customer, token, isLoading, login, register, logout, updateCustomer],
+    [customer, token, isLoading, sessionError, retrySession, login, register, logout, updateCustomer],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthRequestError } from '@/lib/api/auth';
 import { AuthProvider, useAuth } from './AuthProvider';
+import SessionNotice from './SessionNotice';
 
 const TOKEN_KEY = 'caffeinawa_access_token';
 
@@ -12,12 +14,17 @@ const mocks = vi.hoisted(() => ({
   updateCurrentCustomer: vi.fn(),
 }));
 
-vi.mock('@/lib/api/auth', () => ({
-  getCurrentCustomer: mocks.getCurrentCustomer,
-  login: vi.fn(),
-  register: vi.fn(),
-  updateCurrentCustomer: mocks.updateCurrentCustomer,
-}));
+vi.mock('@/lib/api/auth', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/api/auth')>();
+
+  return {
+    ...actual,
+    getCurrentCustomer: mocks.getCurrentCustomer,
+    updateCurrentCustomer: mocks.updateCurrentCustomer,
+    login: vi.fn(),
+    register: vi.fn(),
+  };
+});
 
 const firstCustomer = {
   id: 'customer-1',
@@ -63,6 +70,7 @@ function SessionProbe() {
 function renderSession() {
   return render(
     <AuthProvider>
+      <SessionNotice />
       <SessionProbe />
     </AuthProvider>,
   );
@@ -254,5 +262,73 @@ describe('AuthProvider session synchronization', () => {
     } finally {
       storageSpy.mockRestore();
     }
+  });
+
+  it('keeps the token after a network failure and recovers through retry', async () => {
+    window.localStorage.setItem(TOKEN_KEY, 'token-one');
+
+    mocks.getCurrentCustomer
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(firstCustomer);
+
+    const user = userEvent.setup();
+
+    renderSession();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't check your account.");
+
+    expect(window.localStorage.getItem(TOKEN_KEY)).toBe('token-one');
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Customer One')).toBeInTheDocument();
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    expect(mocks.getCurrentCustomer).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the session when the API returns 401', async () => {
+    window.localStorage.setItem(TOKEN_KEY, 'token-one');
+
+    mocks.getCurrentCustomer.mockRejectedValue(new AuthRequestError(401, 'Session expired'));
+
+    renderSession();
+
+    expect(await screen.findByText('Signed out')).toBeInTheDocument();
+
+    expect(window.localStorage.getItem(TOKEN_KEY)).toBeNull();
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps the loaded customer when a background refresh returns 503', async () => {
+    window.localStorage.setItem(TOKEN_KEY, 'token-one');
+
+    mocks.getCurrentCustomer
+      .mockResolvedValueOnce(firstCustomer)
+      .mockRejectedValueOnce(new AuthRequestError(503, 'Service unavailable'));
+
+    renderSession();
+
+    await screen.findByText('Customer One');
+
+    act(() => {
+      window.localStorage.setItem('caffeinawa_profile_updated', 'background-refresh');
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'caffeinawa_profile_updated',
+          newValue: 'background-refresh',
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    await screen.findByRole('alert');
+
+    expect(screen.getByText('Customer One')).toBeInTheDocument();
+
+    expect(window.localStorage.getItem(TOKEN_KEY)).toBe('token-one');
   });
 });
