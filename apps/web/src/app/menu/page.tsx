@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { CoffeeCategory } from '@caffeinawa/types';
 
 import { CoffeeGrid } from '@/components/coffee/CoffeeGrid';
+import MenuCartSync from '@/components/coffee/MenuCartSync';
 import QueryProvider from '@/components/providers/QueryProvider';
 import { getMenu } from '@/lib/api/menu';
 
@@ -231,6 +232,7 @@ function MenuContent() {
 export default function MenuPage() {
   return (
     <QueryProvider>
+      <MenuCartSync />
       <MenuContent />
     </QueryProvider>
   );

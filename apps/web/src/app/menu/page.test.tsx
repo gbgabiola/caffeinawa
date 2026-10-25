@@ -14,8 +14,13 @@ vi.mock('@/lib/api/menu', () => ({
   getMenu: mocks.getMenu,
 }));
 
-// Keep these tests focused on browsing.
-// Cart behavior has its own CoffeeCard tests.
+vi.mock('@/components/auth/AuthProvider', () => ({
+  useAuth: () => ({
+    customer: null,
+    isAuthenticated: false,
+  }),
+}));
+
 vi.mock('@/components/coffee/CoffeeCard', () => ({
   CoffeeCard: ({ coffee }: { coffee: Coffee }) => (
     <article>

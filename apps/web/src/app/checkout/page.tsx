@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import type { Cart, PaymentProvider } from '@caffeinawa/types';
-
 import { useAuth } from '@/components/auth/AuthProvider';
 import { checkoutCart, getCart, isPayMongoCheckoutResponse } from '@/lib/api/cart';
+import { notifyCartChanged } from '@/lib/cart-events';
+
+import type { Cart, PaymentProvider } from '@caffeinawa/types';
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -91,6 +92,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
 
     try {
       const result = await checkoutCart(accessToken, customerId, paymentProvider);
+      notifyCartChanged(customerId);
 
       if (isPayMongoCheckoutResponse(result)) {
         window.location.assign(result.checkoutUrl);

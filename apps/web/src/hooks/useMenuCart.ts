@@ -4,6 +4,7 @@ import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { addCartItem, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
+import { notifyCartChanged } from '@/lib/cart-events';
 
 import type { Cart } from '@caffeinawa/types';
 
@@ -71,6 +72,7 @@ export function useMenuCart() {
 
     onSuccess: cart => {
       queryClient.setQueryData<Cart>(queryKey, cart);
+      notifyCartChanged(cart.customerId);
     },
   });
 

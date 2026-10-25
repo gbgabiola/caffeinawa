@@ -7,6 +7,7 @@ import type { Cart } from '@caffeinawa/types';
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { clearCart, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
+import { notifyCartChanged } from '@/lib/cart-events';
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -69,6 +70,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
           : await updateCartItem(accessToken, customerId, itemId, quantity);
 
       setCart(result);
+      notifyCartChanged(customerId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update the cart item.');
     } finally {
@@ -84,6 +86,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
 
     try {
       setCart(await clearCart(accessToken, customerId));
+      notifyCartChanged(customerId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to clear your cart.');
     } finally {
