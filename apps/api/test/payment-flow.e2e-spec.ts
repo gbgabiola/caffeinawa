@@ -19,12 +19,12 @@ describe('Cash checkout and payment flow (database e2e)', () => {
 
   let customerToken: string;
   let adminToken: string;
+  let previousAcceptingOrders: boolean | undefined;
 
   beforeAll(async () => {
     // -------------------------------------------------------
     // 1. Validate test database configuration
     // -------------------------------------------------------
-
     const databaseUrl = process.env.DATABASE_URL;
     const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -48,7 +48,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // 2. Initialize the NestJS application
     // -------------------------------------------------------
-
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -69,10 +68,20 @@ describe('Cash checkout and payment flow (database e2e)', () => {
 
     prisma = app.get(PrismaService);
 
+    const previousSettings = await prisma.storeSettings.findUniqueOrThrow({
+      where: { id: 'main' },
+    });
+
+    previousAcceptingOrders = previousSettings.acceptingOrders;
+
+    await prisma.storeSettings.update({
+      where: { id: 'main' },
+      data: { acceptingOrders: false },
+    });
+
     // -------------------------------------------------------
     // 3. Create isolated test fixtures
     // -------------------------------------------------------
-
     const jwtService = app.get(JwtService);
     const suffix = randomUUID();
 
@@ -101,7 +110,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // 4. Generate authentication tokens
     // -------------------------------------------------------
-
     customerToken = await jwtService.signAsync({
       sub: customer.id,
       email: customer.email,
@@ -124,7 +132,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
       // -----------------------------------------------------
       // 1. Delete payments and order items before the order
       // -----------------------------------------------------
-
       if (orderId) {
         await prisma.payment.deleteMany({
           where: {
@@ -148,7 +155,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
       // -----------------------------------------------------
       // 2. Delete cart items and cart
       // -----------------------------------------------------
-
       if (customerId) {
         await prisma.cartItem.deleteMany({
           where: {
@@ -189,8 +195,19 @@ describe('Cash checkout and payment flow (database e2e)', () => {
         });
       }
     } finally {
-      if (app) {
-        await app.close();
+      try {
+        if (prisma && previousAcceptingOrders !== undefined) {
+          await prisma.storeSettings.update({
+            where: { id: 'main' },
+            data: {
+              acceptingOrders: previousAcceptingOrders,
+            },
+          });
+        }
+      } finally {
+        if (app) {
+          await app.close();
+        }
       }
     }
   });
@@ -203,7 +220,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 1: Customer adds coffee to the cart
     // -------------------------------------------------------
-
     const addItemResponse = await request(app.getHttpServer())
       .post(`/api/customers/${customerId}/cart/items`)
       .set('Authorization', `Bearer ${customerToken}`)
@@ -225,10 +241,71 @@ describe('Cash checkout and payment flow (database e2e)', () => {
       ],
     });
 
+    await request(app.getHttpServer())
+      .get('/api/store/ordering')
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.acceptingOrders).toBe(false);
+      });
+
+    await request(app.getHttpServer())
+      .patch('/api/admin/store/ordering')
+      .send({ acceptingOrders: true })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .patch('/api/admin/store/ordering')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ acceptingOrders: true })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .patch('/api/admin/store/ordering')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ acceptingOrders: 'true' })
+      .expect(400);
+
+    for (const paymentProvider of ['cash', 'paymongo']) {
+      await request(app.getHttpServer())
+        .post(`/api/customers/${customerId}/cart/checkout`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ paymentProvider })
+        .expect(409)
+        .expect(({ body }) => {
+          expect(body.code).toBe('ORDERING_CLOSED');
+        });
+    }
+
+    await request(app.getHttpServer())
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({
+        items: [{ coffeeId, quantity: 1 }],
+      })
+      .expect(409);
+
+    expect(await prisma.order.count({ where: { customerId } })).toBe(0);
+
+    const preservedCart = await prisma.cart.findUniqueOrThrow({
+      where: { customerId },
+      include: { items: true },
+    });
+
+    expect(preservedCart.items).toHaveLength(1);
+    expect(preservedCart.items[0]?.quantity).toBe(2);
+
+    await request(app.getHttpServer())
+      .patch('/api/admin/store/ordering')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ acceptingOrders: true })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.acceptingOrders).toBe(true);
+      });
+
     // -------------------------------------------------------
     // STEP 2: Customer checks out using cash
     // -------------------------------------------------------
-
     const checkoutResponse = await request(app.getHttpServer())
       .post(`/api/customers/${customerId}/cart/checkout`)
       .set('Authorization', `Bearer ${customerToken}`)
@@ -248,7 +325,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 3: Verify persisted order and payment
     // -------------------------------------------------------
-
     const persistedOrder = await prisma.order.findUnique({
       where: {
         id: orderId,
@@ -291,7 +367,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 4: Verify checkout cleared the cart
     // -------------------------------------------------------
-
     const cartResponse = await request(app.getHttpServer())
       .get(`/api/customers/${customerId}/cart`)
       .set('Authorization', `Bearer ${customerToken}`)
@@ -306,7 +381,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 5: Customer cannot manually settle payment
     // -------------------------------------------------------
-
     await request(app.getHttpServer())
       .patch(`/api/admin/payments/${cashPayment.id}/mark-paid`)
       .set('Authorization', `Bearer ${customerToken}`)
@@ -323,6 +397,11 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 6: Administrator settles the cash payment
     // -------------------------------------------------------
+    await request(app.getHttpServer())
+      .patch('/api/admin/store/ordering')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ acceptingOrders: false })
+      .expect(200);
 
     const settleResponse = await request(app.getHttpServer())
       .patch(`/api/admin/payments/${cashPayment.id}/mark-paid`)
@@ -342,7 +421,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 7: Verify payment and order database updates
     // -------------------------------------------------------
-
     const settledPayment = await prisma.payment.findUniqueOrThrow({
       where: {
         id: cashPayment.id,
@@ -366,7 +444,6 @@ describe('Cash checkout and payment flow (database e2e)', () => {
     // -------------------------------------------------------
     // STEP 8: Repeated settlement must be idempotent
     // -------------------------------------------------------
-
     const repeatResponse = await request(app.getHttpServer())
       .patch(`/api/admin/payments/${cashPayment.id}/mark-paid`)
       .set('Authorization', `Bearer ${adminToken}`)

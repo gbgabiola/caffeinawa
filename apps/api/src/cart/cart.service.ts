@@ -7,17 +7,19 @@ import { PaymentProvider, PaymentStatus, Prisma } from '@prisma/client';
 import type { Cart, CartItem, Order, OrderStatus } from '@caffeinawa/types';
 
 import { PrismaService } from '../database/prisma.service.js';
+import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
+import { CartEntity } from './entities/cart.entity.js';
+import type { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 import { PaymentEntity } from '../payment/entities/payment.entity.js';
 import { PaymentService } from '../payment/payment.service.js';
-import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
-import type { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
-import { CartEntity } from './entities/cart.entity.js';
+import { StoreService } from '../store/store.service.js';
 
 @Injectable()
 export class CartService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentService: PaymentService,
+    private readonly storeService: StoreService,
   ) {}
 
   private toEntity(
@@ -199,6 +201,8 @@ export class CartService {
       }
   > {
     const order = await this.prisma.$transaction(async (tx) => {
+      await this.storeService.assertAcceptingOrders(tx);
+
       const customer = await tx.customer.findUnique({
         where: { id: customerId },
       });

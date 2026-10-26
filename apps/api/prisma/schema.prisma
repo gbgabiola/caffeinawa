@@ -175,3 +175,9 @@ model PaymentReconciliationIssue {
   @@index([checkoutSessionId])
   @@index([orderId])
 }
+
+model StoreSettings {
+  id              String   @id @default("main")
+  acceptingOrders Boolean  @default(false)
+  updatedAt       DateTime @default(now()) @updatedAt
+}

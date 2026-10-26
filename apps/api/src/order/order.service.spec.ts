@@ -1,8 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
+import { StoreService } from '../store/store.service.js';
 import { OrderService } from './order.service.js';
 
 const customerId = 'customer-1';
@@ -45,6 +46,12 @@ function makeAdminOrder(overrides: Record<string, unknown> = {}) {
 
 function createHarness() {
   const prisma = {
+    customer: {
+      findUnique: vi.fn(),
+    },
+    coffee: {
+      findMany: vi.fn(),
+    },
     order: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -53,11 +60,24 @@ function createHarness() {
       update: vi.fn(),
       count: vi.fn(),
     },
+    $transaction: vi.fn(),
   };
 
-  const service = new OrderService(prisma as unknown as PrismaService);
+  prisma.$transaction.mockImplementation(
+    async (callback: (transaction: typeof prisma) => Promise<unknown>) =>
+      callback(prisma),
+  );
 
-  return { service, prisma };
+  const storeService = {
+    assertAcceptingOrders: vi.fn().mockResolvedValue(undefined),
+  };
+
+  const service = new OrderService(
+    prisma as unknown as PrismaService,
+    storeService as unknown as StoreService,
+  );
+
+  return { service, prisma, storeService };
 }
 
 describe('OrderService', () => {
@@ -232,6 +252,56 @@ describe('OrderService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(harness.prisma.order.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create', () => {
+    it('rejects direct order creation while ordering is closed', async () => {
+      harness.storeService.assertAcceptingOrders.mockRejectedValueOnce(
+        new ConflictException('Ordering is closed'),
+      );
+
+      await expect(
+        harness.service.create(customerId, {
+          items: [{ coffeeId, quantity: 2 }],
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(harness.storeService.assertAcceptingOrders).toHaveBeenCalledWith(
+        harness.prisma,
+      );
+
+      expect(harness.prisma.customer.findUnique).not.toHaveBeenCalled();
+      expect(harness.prisma.coffee.findMany).not.toHaveBeenCalled();
+      expect(harness.prisma.order.create).not.toHaveBeenCalled();
+    });
+
+    it('creates an order when ordering is open', async () => {
+      harness.prisma.customer.findUnique.mockResolvedValue({
+        id: customerId,
+      });
+
+      harness.prisma.coffee.findMany.mockResolvedValue([
+        {
+          id: coffeeId,
+          price: new Prisma.Decimal('125.00'),
+          available: true,
+        },
+      ]);
+
+      harness.prisma.order.create.mockResolvedValue(makeOrder());
+
+      const result = await harness.service.create(customerId, {
+        items: [{ coffeeId, quantity: 2 }],
+      });
+
+      expect(result).toMatchObject({
+        customerId,
+        status: 'pending',
+        total: 250,
+      });
+
+      expect(harness.prisma.order.create).toHaveBeenCalledOnce();
     });
   });
 });

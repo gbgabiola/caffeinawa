@@ -7,6 +7,7 @@ import { Prisma, OrderStatus as PrismaOrderStatus } from '@prisma/client';
 
 import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { StoreService } from '../store/store.service.js';
 import { OrderEntity } from './entities/order.entity.js';
 
 import type { AdminOrder, Order, OrderStatus } from '@caffeinawa/types';
@@ -27,7 +28,10 @@ type AdminOrderRecord = Prisma.OrderGetPayload<{
 
 @Injectable()
 export class OrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storeService: StoreService,
+  ) {}
   private toEntity(
     order: Prisma.OrderGetPayload<{
       include: {
@@ -85,59 +89,63 @@ export class OrderService {
   }
 
   async create(customerId: string, dto: CreateOrderDto): Promise<Order> {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: customerId },
-    });
+    const order = await this.prisma.$transaction(async (tx) => {
+      await this.storeService.assertAcceptingOrders(tx);
 
-    if (!customer) {
-      throw new NotFoundException(`Customer "${customerId}" not found`);
-    }
+      const customer = await tx.customer.findUnique({
+        where: { id: customerId },
+      });
 
-    const coffeeIds = dto.items.map(
-      (item: CreateOrderItemDto) => item.coffeeId,
-    );
+      if (!customer) {
+        throw new NotFoundException(`Customer "${customerId}" not found`);
+      }
 
-    const coffees = await this.prisma.coffee.findMany({
-      where: { id: { in: coffeeIds } },
-    });
-
-    if (coffees.length !== new Set(coffeeIds).size) {
-      throw new BadRequestException('One or more coffee items do not exist');
-    }
-
-    const unavailableCoffee = coffees.find((coffee) => !coffee.available);
-
-    if (unavailableCoffee) {
-      throw new BadRequestException(
-        `Coffee "${unavailableCoffee.id}" is not currently available`,
+      const coffeeIds = dto.items.map(
+        (item: CreateOrderItemDto) => item.coffeeId,
       );
-    }
 
-    const coffeeMap = new Map(coffees.map((coffee) => [coffee.id, coffee]));
+      const coffees = await tx.coffee.findMany({
+        where: { id: { in: coffeeIds } },
+      });
 
-    const items = dto.items.map((item) => {
-      const coffee = coffeeMap.get(item.coffeeId)!;
+      if (coffees.length !== new Set(coffeeIds).size) {
+        throw new BadRequestException('One or more coffee items do not exist');
+      }
 
-      return {
-        coffeeId: coffee.id,
-        quantity: item.quantity,
-        unitPrice: coffee.price,
-      };
-    });
+      const unavailableCoffee = coffees.find((coffee) => !coffee.available);
 
-    const total = items.reduce(
-      (sum, item) => sum + item.unitPrice.toNumber() * item.quantity,
-      0,
-    );
+      if (unavailableCoffee) {
+        throw new BadRequestException(
+          `Coffee "${unavailableCoffee.id}" is not currently available`,
+        );
+      }
 
-    const order = await this.prisma.order.create({
-      data: {
-        customerId,
-        status: PrismaOrderStatus.PENDING,
-        total: new Prisma.Decimal(total),
-        items: { create: items },
-      },
-      include: { items: true },
+      const coffeeMap = new Map(coffees.map((coffee) => [coffee.id, coffee]));
+
+      const items = dto.items.map((item) => {
+        const coffee = coffeeMap.get(item.coffeeId)!;
+
+        return {
+          coffeeId: coffee.id,
+          quantity: item.quantity,
+          unitPrice: coffee.price,
+        };
+      });
+
+      const total = items.reduce(
+        (sum, item) => sum + item.unitPrice.toNumber() * item.quantity,
+        0,
+      );
+
+      return tx.order.create({
+        data: {
+          customerId,
+          status: PrismaOrderStatus.PENDING,
+          total: new Prisma.Decimal(total),
+          items: { create: items },
+        },
+        include: { items: true },
+      });
     });
 
     return this.toEntity(order);

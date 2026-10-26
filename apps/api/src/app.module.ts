@@ -9,6 +9,7 @@ import { HealthController } from './health/health.controller.js';
 import { MenuModule } from './menu/menu.module.js';
 import { OrderModule } from './order/order.module.js';
 import { PaymentModule } from './payment/payment.module.js';
+import { StoreModule } from './store/store.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PaymentModule } from './payment/payment.module.js';
     CartModule,
     AuthModule,
     PaymentModule,
+    StoreModule,
   ],
   controllers: [HealthController],
 })

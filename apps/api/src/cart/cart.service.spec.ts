@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   OrderStatus,
   PaymentProvider,
@@ -6,8 +10,10 @@ import {
   Prisma,
 } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentService } from '../payment/payment.service.js';
+import { StoreService } from '../store/store.service.js';
 import { CartService } from './cart.service.js';
 
 const customerId = 'customer-1';
@@ -103,12 +109,17 @@ function createHarness() {
     createPayMongoPayment: vi.fn(),
   };
 
+  const storeService = {
+    assertAcceptingOrders: vi.fn().mockResolvedValue(undefined),
+  };
+
   const service = new CartService(
     prisma as unknown as PrismaService,
     paymentService as unknown as PaymentService,
+    storeService as unknown as StoreService,
   );
 
-  return { service, prisma, paymentService, tx };
+  return { service, prisma, paymentService, storeService, tx };
 }
 
 describe('CartService', () => {
@@ -533,5 +544,32 @@ describe('CartService', () => {
 
       expect(transactionFinished).toBe(true);
     });
+
+    it.each(['cash', 'paymongo'] as const)(
+      'rejects %s checkout while ordering is closed',
+      async (provider) => {
+        harness.storeService.assertAcceptingOrders.mockRejectedValueOnce(
+          new ConflictException('Ordering is closed'),
+        );
+
+        await expect(
+          harness.service.checkout(customerId, provider),
+        ).rejects.toBeInstanceOf(ConflictException);
+
+        expect(harness.storeService.assertAcceptingOrders).toHaveBeenCalledWith(
+          harness.tx,
+        );
+
+        expect(harness.tx.order.create).not.toHaveBeenCalled();
+        expect(harness.tx.payment.create).not.toHaveBeenCalled();
+        expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
+
+        expect(harness.paymentService.createCashPayment).not.toHaveBeenCalled();
+
+        expect(
+          harness.paymentService.createPayMongoPayment,
+        ).not.toHaveBeenCalled();
+      },
+    );
   });
 });
