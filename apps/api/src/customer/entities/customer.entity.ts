@@ -6,6 +6,8 @@ export class CustomerEntity implements Customer {
   email: string;
 
   constructor(data: Customer) {
-    Object.assign(this, data);
+    this.id = data.id;
+    this.name = data.name;
+    this.email = data.email;
   }
 }
