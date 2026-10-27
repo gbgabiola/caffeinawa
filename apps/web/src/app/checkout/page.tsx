@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+import QueryProvider from '@/components/providers/QueryProvider';
+import StoreOrderingNotice from '@/features/store/StoreOrderingNotice';
+import { useStoreOrdering } from '@/hooks/useStoreOrdering';
 import { checkoutCart, getCart, isPayMongoCheckoutResponse } from '@/lib/api/cart';
 import { notifyCartChanged } from '@/lib/cart-events';
 
@@ -39,6 +42,10 @@ interface CustomerCheckoutProps {
 
 function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
   const router = useRouter();
+  const ordering = useStoreOrdering();
+
+  const acceptingOrders = ordering.data?.acceptingOrders === true && !ordering.isError;
+
   const checkoutInFlight = useRef(false);
 
   const [cart, setCart] = useState<Cart | null>(null);
@@ -82,7 +89,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
   const hasUnavailableItem = cart?.items.some(item => !item.coffee.available) ?? false;
 
   async function handleCheckout() {
-    if (!cart || cart.items.length === 0 || hasUnavailableItem || checkoutInFlight.current) {
+    if (!cart || cart.items.length === 0 || !acceptingOrders || hasUnavailableItem || checkoutInFlight.current) {
       return;
     }
 
@@ -134,6 +141,10 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
         <p className="mt-3 text-sm leading-7 text-cafe-muted">
           Review your drinks and choose how you&apos;d like to pay.
         </p>
+
+        <div className="mt-6">
+          <StoreOrderingNotice />
+        </div>
 
         {error && (
           <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -279,16 +290,22 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
               <button
                 type="button"
                 onClick={() => void handleCheckout()}
-                disabled={submitting || hasUnavailableItem}
+                disabled={submitting || hasUnavailableItem || !acceptingOrders}
                 className="mt-6 flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting
                   ? paymentProvider === 'paymongo'
                     ? 'Redirecting...'
                     : 'Placing order...'
-                  : paymentProvider === 'paymongo'
-                    ? 'Continue to PayMongo'
-                    : 'Place cash order'}
+                  : !acceptingOrders
+                    ? ordering.isPending
+                      ? 'Checking availability...'
+                      : ordering.isError
+                        ? 'Ordering availability unavailable'
+                        : 'Ordering is closed'
+                    : paymentProvider === 'paymongo'
+                      ? 'Continue to PayMongo'
+                      : 'Place cash order'}
               </button>
 
               <p className="mt-4 text-center text-xs leading-6 text-cafe-muted">
@@ -336,5 +353,9 @@ export default function CheckoutPage() {
     );
   }
 
-  return <CustomerCheckout key={customer.id} customerId={customer.id} accessToken={accessToken} />;
+  return (
+    <QueryProvider>
+      <CustomerCheckout key={customer.id} customerId={customer.id} accessToken={accessToken} />
+    </QueryProvider>
+  );
 }

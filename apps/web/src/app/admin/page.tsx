@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import StoreOrderingPanel from '@/features/store/StoreOrderingPanel';
+
 export default function AdminPage() {
   return (
     <div className="px-6 py-8 lg:px-8">
@@ -13,6 +15,8 @@ export default function AdminPage() {
             Manage customers, orders, and the coffee catalog from one place.
           </p>
         </div>
+
+        <StoreOrderingPanel />
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

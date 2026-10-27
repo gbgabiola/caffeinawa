@@ -9,6 +9,7 @@ import type { CoffeeCategory } from '@caffeinawa/types';
 import { CoffeeGrid } from '@/components/coffee/CoffeeGrid';
 import MenuCartSync from '@/components/coffee/MenuCartSync';
 import QueryProvider from '@/components/providers/QueryProvider';
+import StoreOrderingNotice from '@/features/store/StoreOrderingNotice';
 import { getMenu } from '@/lib/api/menu';
 
 const categories: {
@@ -103,6 +104,10 @@ function MenuContent() {
         aria-labelledby="menu-heading"
         className="mx-auto max-w-7xl scroll-mt-6 px-5 py-9 sm:px-8 sm:py-12"
       >
+        <div className="mb-6">
+          <StoreOrderingNotice />
+        </div>
+
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="menu-heading" className="font-display text-3xl tracking-[-0.04em] sm:text-4xl">
             Find your favorite

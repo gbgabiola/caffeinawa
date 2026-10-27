@@ -10,10 +10,6 @@ const mocks = vi.hoisted(() => ({
   getMenu: vi.fn(),
 }));
 
-vi.mock('@/lib/api/menu', () => ({
-  getMenu: mocks.getMenu,
-}));
-
 vi.mock('@/components/auth/AuthProvider', () => ({
   useAuth: () => ({
     customer: null,
@@ -27,6 +23,14 @@ vi.mock('@/components/coffee/CoffeeCard', () => ({
       <h3>{coffee.name}</h3>
     </article>
   ),
+}));
+
+vi.mock('@/features/store/StoreOrderingNotice', () => ({
+  default: () => null,
+}));
+
+vi.mock('@/lib/api/menu', () => ({
+  getMenu: mocks.getMenu,
 }));
 
 const coffees: Coffee[] = [
