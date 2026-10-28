@@ -211,6 +211,13 @@ export class CartService {
         throw new NotFoundException(`Customer "${customerId}" not found`);
       }
 
+      await tx.$queryRaw`
+        SELECT "id"
+        FROM "Cart"
+        WHERE "customerId" = ${customerId}
+        FOR UPDATE
+      `;
+
       const cart = await tx.cart.findUnique({
         where: { customerId },
         include: {

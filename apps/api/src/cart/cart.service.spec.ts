@@ -80,6 +80,8 @@ function makeOrder() {
 
 function createHarness() {
   const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+
     customer: { findUnique: vi.fn() },
     cart: { findUnique: vi.fn() },
     order: { create: vi.fn() },
@@ -571,5 +573,26 @@ describe('CartService', () => {
         ).not.toHaveBeenCalled();
       },
     );
+
+    it('locks the customer cart before reading its items', async () => {
+      harness.tx.$queryRaw.mockImplementationOnce(async () => {
+        expect(harness.tx.cart.findUnique).not.toHaveBeenCalled();
+        expect(harness.tx.order.create).not.toHaveBeenCalled();
+
+        return [];
+      });
+
+      await harness.service.checkout(customerId, 'cash');
+
+      expect(harness.tx.$queryRaw).toHaveBeenCalledOnce();
+
+      const [strings, lockedCustomerId] = harness.tx.$queryRaw.mock.calls[0];
+
+      expect(strings.join('')).toContain('FROM "Cart"');
+      expect(strings.join('')).toContain('FOR UPDATE');
+      expect(lockedCustomerId).toBe(customerId);
+
+      expect(harness.tx.order.create).toHaveBeenCalledOnce();
+    });
   });
 });
