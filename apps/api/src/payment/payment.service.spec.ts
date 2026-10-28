@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import type { Payment } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { PrismaService } from '../database/prisma.service.js';
 import { PayMongoService } from './paymongo.service.js';
 import { PaymentService } from './payment.service.js';
@@ -14,16 +15,6 @@ import { PaymentService } from './payment.service.js';
 const paymentId = 'payment-1';
 const orderId = 'order-1';
 const fixedDate = new Date('2026-10-01T10:00:00.000Z');
-
-type TransactionMock = {
-  payment: {
-    findUnique: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-  };
-  order: {
-    update: ReturnType<typeof vi.fn>;
-  };
-};
 
 function makePayment(overrides: Partial<Payment> = {}): Payment {
   return {
@@ -43,10 +34,15 @@ function makePayment(overrides: Partial<Payment> = {}): Payment {
   };
 }
 
-function makeAdminPaymentRecord(payment: Payment) {
+function makeAdminPayment(
+  overrides: Partial<Payment> = {},
+  orderStatus: OrderStatus = OrderStatus.PENDING,
+) {
   return {
-    ...payment,
+    ...makePayment(overrides),
     order: {
+      id: orderId,
+      status: orderStatus,
       customer: {
         id: 'customer-1',
         name: 'Test Customer',
@@ -63,26 +59,36 @@ function makeAdminPaymentRecord(payment: Payment) {
   };
 }
 
+function makePaidPayment() {
+  return makeAdminPayment({
+    status: PaymentStatus.PAID,
+    paidAt: fixedDate,
+  });
+}
+
 function createHarness() {
-  const tx: TransactionMock = {
+  const tx = {
     payment: {
       findUnique: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     order: {
-      update: vi.fn(),
+      findUnique: vi.fn(),
+      updateMany: vi.fn(),
     },
   };
 
   const prisma = {
     $transaction: vi.fn(
-      async (callback: (transaction: TransactionMock) => Promise<unknown>) =>
+      async (callback: (transaction: typeof tx) => Promise<unknown>) =>
         callback(tx),
     ),
-  } as unknown as PrismaService;
+  };
 
-  const payMongoService = {} as PayMongoService;
-  const service = new PaymentService(prisma, payMongoService);
+  const service = new PaymentService(
+    prisma as unknown as PrismaService,
+    {} as PayMongoService,
+  );
 
   return { service, prisma, tx };
 }
@@ -92,38 +98,44 @@ describe('PaymentService.markCashPaymentAsPaid', () => {
 
   beforeEach(() => {
     harness = createHarness();
-  });
-
-  it('marks a pending cash payment as paid and confirms its order', async () => {
-    const pendingPayment = makePayment();
-    const paidPayment = makePayment({
-      status: PaymentStatus.PAID,
-      paidAt: fixedDate,
-      updatedAt: fixedDate,
-    });
 
     harness.tx.payment.findUnique
-      .mockResolvedValueOnce(pendingPayment)
-      .mockResolvedValueOnce(makeAdminPaymentRecord(paidPayment));
-    harness.tx.payment.update.mockResolvedValueOnce(paidPayment);
+      .mockResolvedValueOnce(makeAdminPayment())
+      .mockResolvedValue(makePaidPayment());
 
+    harness.tx.payment.updateMany.mockResolvedValue({ count: 1 });
+    harness.tx.order.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('conditionally settles cash and confirms a pending order', async () => {
     const result = await harness.service.markCashPaymentAsPaid(paymentId);
 
     expect(harness.prisma.$transaction).toHaveBeenCalledOnce();
-    expect(harness.tx.payment.update).toHaveBeenCalledWith({
-      where: { id: paymentId },
+
+    expect(harness.tx.payment.updateMany).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        id: paymentId,
+        provider: PaymentProvider.CASH,
+        status: PaymentStatus.PENDING,
+      },
       data: {
         status: PaymentStatus.PAID,
         paidAt: expect.any(Date),
       },
     });
-    expect(harness.tx.order.update).toHaveBeenCalledWith({
-      where: { id: orderId },
-      data: { status: OrderStatus.CONFIRMED },
+
+    expect(harness.tx.order.updateMany).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        id: orderId,
+        status: OrderStatus.PENDING,
+      },
+      data: {
+        status: OrderStatus.CONFIRMED,
+      },
     });
+
     expect(result).toMatchObject({
       id: paymentId,
-      orderId,
       provider: 'cash',
       status: 'paid',
       amount: 250,
@@ -145,63 +157,168 @@ describe('PaymentService.markCashPaymentAsPaid', () => {
     });
   });
 
-  it('throws NotFoundException when the payment does not exist', async () => {
-    harness.tx.payment.findUnique.mockResolvedValueOnce(null);
+  it('rejects a missing payment', async () => {
+    harness.tx.payment.findUnique.mockReset().mockResolvedValue(null);
 
     await expect(
       harness.service.markCashPaymentAsPaid(paymentId),
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
   });
 
-  it('rejects manually marking a PayMongo payment as paid', async () => {
-    harness.tx.payment.findUnique.mockResolvedValueOnce(
-      makePayment({ provider: PaymentProvider.PAYMONGO }),
-    );
-
-    await expect(
-      harness.service.markCashPaymentAsPaid(paymentId),
-    ).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects a cash payment that is not pending', async () => {
-    harness.tx.payment.findUnique.mockResolvedValueOnce(
-      makePayment({ status: PaymentStatus.FAILED }),
-    );
-
-    await expect(
-      harness.service.markCashPaymentAsPaid(paymentId),
-    ).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
-  });
-
-  it('returns an already-paid cash payment without updating it again', async () => {
-    const paidPayment = makePayment({
-      status: PaymentStatus.PAID,
-      paidAt: fixedDate,
-      updatedAt: fixedDate,
-    });
+  it('rejects manual settlement of PayMongo payments', async () => {
     harness.tx.payment.findUnique
-      .mockResolvedValueOnce(paidPayment)
-      .mockResolvedValueOnce(makeAdminPaymentRecord(paidPayment));
+      .mockReset()
+      .mockResolvedValue(
+        makeAdminPayment({ provider: PaymentProvider.PAYMONGO }),
+      );
+
+    await expect(
+      harness.service.markCashPaymentAsPaid(paymentId),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    PaymentStatus.FAILED,
+    PaymentStatus.EXPIRED,
+    PaymentStatus.CANCELLED,
+  ])('rejects settlement from %s', async (status) => {
+    harness.tx.payment.findUnique
+      .mockReset()
+      .mockResolvedValue(makeAdminPayment({ status }));
+
+    await expect(
+      harness.service.markCashPaymentAsPaid(paymentId),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('returns an already-paid payment without changing its timestamp or order', async () => {
+    harness.tx.payment.findUnique
+      .mockReset()
+      .mockResolvedValue(
+        makeAdminPayment(
+          { status: PaymentStatus.PAID, paidAt: fixedDate },
+          OrderStatus.CANCELLED,
+        ),
+      );
 
     const result = await harness.service.markCashPaymentAsPaid(paymentId);
 
-    expect(harness.tx.payment.findUnique).toHaveBeenCalledTimes(2);
-    expect(harness.tx.payment.update).not.toHaveBeenCalled();
-    expect(harness.tx.order.update).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      id: paymentId,
-      provider: 'cash',
-      status: 'paid',
-      paidAt: fixedDate.toISOString(),
+    expect(result.paidAt).toBe(fixedDate.toISOString());
+    expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+    expect(harness.tx.order.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('returns the winning settlement after losing a concurrent claim', async () => {
+    harness.tx.payment.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await harness.service.markCashPaymentAsPaid(paymentId);
+
+    expect(result.status).toBe('paid');
+    expect(result.paidAt).toBe(fixedDate.toISOString());
+
+    expect(harness.tx.payment.updateMany).toHaveBeenCalledOnce();
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a concurrent change to a non-payable status', async () => {
+    harness.tx.payment.updateMany.mockResolvedValue({ count: 0 });
+    harness.tx.payment.findUnique
+      .mockReset()
+      .mockResolvedValueOnce(makeAdminPayment())
+      .mockResolvedValueOnce(
+        makeAdminPayment({ status: PaymentStatus.FAILED }),
+      );
+
+    await expect(
+      harness.service.markCashPaymentAsPaid(paymentId),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a payment that disappears before the claim completes', async () => {
+    harness.tx.payment.updateMany.mockResolvedValue({ count: 0 });
+    harness.tx.payment.findUnique
+      .mockReset()
+      .mockResolvedValueOnce(makeAdminPayment())
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      harness.service.markCashPaymentAsPaid(paymentId),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    OrderStatus.CONFIRMED,
+    OrderStatus.PREPARING,
+    OrderStatus.READY,
+    OrderStatus.COMPLETED,
+  ])('preserves an order already at %s', async (status) => {
+    harness.tx.order.updateMany.mockResolvedValue({ count: 0 });
+    harness.tx.order.findUnique.mockResolvedValue({
+      id: orderId,
+      status,
     });
+
+    const result = await harness.service.markCashPaymentAsPaid(paymentId);
+
+    expect(result.status).toBe('paid');
+
+    expect(harness.tx.order.updateMany).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        id: orderId,
+        status: OrderStatus.PENDING,
+      },
+      data: {
+        status: OrderStatus.CONFIRMED,
+      },
+    });
+  });
+
+  it('throws inside the transaction when the order is cancelled', async () => {
+    harness.tx.order.updateMany.mockResolvedValue({ count: 0 });
+    harness.tx.order.findUnique.mockResolvedValue({
+      id: orderId,
+      status: OrderStatus.CANCELLED,
+    });
+
+    await expect(
+      harness.service.markCashPaymentAsPaid(paymentId),
+    ).rejects.toThrow(
+      'Cannot settle cash payment for an order with status "CANCELLED"',
+    );
+
+    // Real rollback is verified by the database E2E test.
+    expect(harness.tx.payment.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a missing order', async () => {
+    harness.tx.order.updateMany.mockResolvedValue({ count: 0 });
+    harness.tx.order.findUnique.mockResolvedValue(null);
+
+    await expect(
+      harness.service.markCashPaymentAsPaid(paymentId),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('propagates unexpected database errors', async () => {
+    const error = new Error('Database unavailable');
+    harness.tx.order.updateMany.mockRejectedValue(error);
+
+    await expect(harness.service.markCashPaymentAsPaid(paymentId)).rejects.toBe(
+      error,
+    );
   });
 });

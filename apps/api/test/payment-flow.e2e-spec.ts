@@ -491,4 +491,173 @@ describe('Cash checkout and payment flow (database e2e)', () => {
 
     expect(persistedPayMongoPayment.paidAt).toBeNull();
   });
+
+  it('rolls back cash settlement for a cancelled order', async () => {
+    if (!customerId) {
+      throw new Error('Customer fixture was not initialized');
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        customerId,
+        total: '250.00',
+        status: OrderStatus.CANCELLED,
+      },
+    });
+
+    try {
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: PaymentProvider.CASH,
+          amount: '250.00',
+          status: PaymentStatus.PENDING,
+        },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/api/admin/payments/${payment.id}/mark-paid`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(400);
+
+      const persistedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+
+      const persistedOrder = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+
+      expect(persistedPayment.status).toBe(PaymentStatus.PENDING);
+      expect(persistedPayment.paidAt).toBeNull();
+      expect(persistedOrder.status).toBe(OrderStatus.CANCELLED);
+    } finally {
+      await prisma.payment.deleteMany({ where: { orderId: order.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  });
+
+  it.each([
+    OrderStatus.CONFIRMED,
+    OrderStatus.PREPARING,
+    OrderStatus.READY,
+    OrderStatus.COMPLETED,
+  ])('settles cash without moving a %s order backward', async (status) => {
+    if (!customerId) {
+      throw new Error('Customer fixture was not initialized');
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        customerId,
+        total: '250.00',
+        status,
+      },
+    });
+
+    try {
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: PaymentProvider.CASH,
+          amount: '250.00',
+          status: PaymentStatus.PENDING,
+        },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/api/admin/payments/${payment.id}/mark-paid`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const persistedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+
+      const persistedOrder = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+
+      expect(persistedPayment.status).toBe(PaymentStatus.PAID);
+      expect(persistedPayment.paidAt).toBeInstanceOf(Date);
+      expect(persistedOrder.status).toBe(status);
+    } finally {
+      await prisma.payment.deleteMany({ where: { orderId: order.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  });
+
+  it('handles concurrent cash settlement without replacing paidAt', async () => {
+    if (!customerId) {
+      throw new Error('Customer fixture was not initialized');
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        customerId,
+        total: '250.00',
+        status: OrderStatus.PENDING,
+      },
+    });
+
+    try {
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          provider: PaymentProvider.CASH,
+          amount: '250.00',
+          status: PaymentStatus.PENDING,
+        },
+      });
+
+      const settle = () =>
+        request(app.getHttpServer())
+          .patch(`/api/admin/payments/${payment.id}/mark-paid`)
+          .set('Authorization', `Bearer ${adminToken}`);
+
+      // Wait for both requests to finish before assertions or cleanup.
+      const results = await Promise.allSettled([settle(), settle()]);
+
+      const paidAtValues: string[] = [];
+
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          throw result.reason;
+        }
+
+        expect(result.value.status).toBe(200);
+        expect(result.value.body.status).toBe('paid');
+        expect(result.value.body.paidAt).toEqual(expect.any(String));
+
+        paidAtValues.push(result.value.body.paidAt);
+      }
+
+      expect(paidAtValues[0]).toBe(paidAtValues[1]);
+
+      const persistedPayment = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+
+      const persistedOrder = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+      });
+
+      expect(persistedPayment.status).toBe(PaymentStatus.PAID);
+      expect(persistedPayment.paidAt?.toISOString()).toBe(paidAtValues[0]);
+      expect(persistedOrder.status).toBe(OrderStatus.CONFIRMED);
+
+      const repeat = await settle().expect(200);
+
+      expect(repeat.body.paidAt).toBe(paidAtValues[0]);
+
+      const afterRepeat = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+
+      expect(afterRepeat.paidAt?.toISOString()).toBe(paidAtValues[0]);
+    } finally {
+      await prisma.payment.deleteMany({ where: { orderId: order.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    }
+  }, 20_000);
 });

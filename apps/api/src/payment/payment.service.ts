@@ -287,29 +287,29 @@ export class PaymentService {
 
   async markCashPaymentAsPaid(id: string): Promise<AdminPayment> {
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findUnique({ where: { id } });
-
-      if (!payment) {
-        throw new NotFoundException(`Payment "${id}" not found`);
-      }
-
-      if (payment.provider !== PaymentProvider.CASH) {
-        throw new BadRequestException(
-          'Only cash payments can be manually marked as paid',
-        );
-      }
-
-      if (payment.status === PaymentStatus.PAID) {
-        const existingPayment = await tx.payment.findUnique({
+      const readPayment = async () => {
+        const payment = await tx.payment.findUnique({
           where: { id },
           include: ADMIN_PAYMENT_INCLUDE,
         });
 
-        if (!existingPayment) {
+        if (!payment) {
           throw new NotFoundException(`Payment "${id}" not found`);
         }
 
-        return this.toAdminEntity(existingPayment);
+        if (payment.provider !== PaymentProvider.CASH) {
+          throw new BadRequestException(
+            'Only cash payments can be manually marked as paid',
+          );
+        }
+
+        return payment;
+      };
+
+      const payment = await readPayment();
+
+      if (payment.status === PaymentStatus.PAID) {
+        return this.toAdminEntity(payment);
       }
 
       if (payment.status !== PaymentStatus.PENDING) {
@@ -318,26 +318,66 @@ export class PaymentService {
         );
       }
 
-      const updatedPayment = await tx.payment.update({
-        where: { id },
-        data: { status: PaymentStatus.PAID, paidAt: new Date() },
+      const claimed = await tx.payment.updateMany({
+        where: {
+          id,
+          provider: PaymentProvider.CASH,
+          status: PaymentStatus.PENDING,
+        },
+        data: {
+          status: PaymentStatus.PAID,
+          paidAt: new Date(),
+        },
       });
 
-      await tx.order.update({
-        where: { id: payment.orderId },
-        data: { status: OrderStatus.CONFIRMED },
-      });
+      if (claimed.count === 0) {
+        // Another request may have settled the payment while this
+        // transaction was waiting for the payment row.
+        const currentPayment = await readPayment();
 
-      const updatedPaymentWithRelations = await tx.payment.findUnique({
-        where: { id: updatedPayment.id },
-        include: ADMIN_PAYMENT_INCLUDE,
-      });
+        if (currentPayment.status === PaymentStatus.PAID) {
+          return this.toAdminEntity(currentPayment);
+        }
 
-      if (!updatedPaymentWithRelations) {
-        throw new NotFoundException(`Payment "${id}" not found`);
+        throw new BadRequestException(
+          `Payment cannot be marked as paid from status "${currentPayment.status}"`,
+        );
       }
 
-      return this.toAdminEntity(updatedPaymentWithRelations);
+      const confirmed = await tx.order.updateMany({
+        where: {
+          id: payment.orderId,
+          status: OrderStatus.PENDING,
+        },
+        data: {
+          status: OrderStatus.CONFIRMED,
+        },
+      });
+
+      if (confirmed.count === 0) {
+        const order = await tx.order.findUnique({
+          where: { id: payment.orderId },
+        });
+
+        if (!order) {
+          throw new NotFoundException(`Order "${payment.orderId}" not found`);
+        }
+
+        const progressed =
+          order.status === OrderStatus.CONFIRMED ||
+          order.status === OrderStatus.PREPARING ||
+          order.status === OrderStatus.READY ||
+          order.status === OrderStatus.COMPLETED;
+
+        if (!progressed) {
+          // Throwing rolls back the payment claim and its paidAt timestamp.
+          throw new BadRequestException(
+            `Cannot settle cash payment for an order with status "${order.status}"`,
+          );
+        }
+      }
+
+      return this.toAdminEntity(await readPayment());
     });
   }
 
