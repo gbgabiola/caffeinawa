@@ -70,9 +70,10 @@ function LoadingResult() {
 interface OrderLookupProps {
   orderId: string;
   accessToken: string;
+  paymentCheckoutUnavailable: boolean;
 }
 
-function OrderLookup({ orderId, accessToken }: OrderLookupProps) {
+function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: OrderLookupProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingOrder, setLoadingOrder] = useState(true);
@@ -208,6 +209,16 @@ function OrderLookup({ orderId, accessToken }: OrderLookupProps) {
               )}
             </dl>
 
+            {paymentCheckoutUnavailable && order?.status === 'pending' && (
+              <p
+                role="alert"
+                className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-950"
+              >
+                Payment checkout could not be opened. Your order already exists. Keep this reference and contact the
+                store for help before placing another order. This message does not confirm whether payment completed.
+              </p>
+            )}
+
             {checking && order && (
               <p role="status" className="mt-5 text-sm text-cafe-muted">
                 Checking for an update...
@@ -263,6 +274,7 @@ function OrderLookup({ orderId, accessToken }: OrderLookupProps) {
 function SuccessContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const paymentCheckoutUnavailable = searchParams.get('paymentCheckout') === 'unavailable';
 
   const { customer, accessToken, isAuthenticated, isLoading } = useAuth();
 
@@ -291,7 +303,11 @@ function SuccessContent() {
     );
   }
 
-  const signInHref = `/login?next=${encodeURIComponent(`/checkout/success?orderId=${encodeURIComponent(orderId)}`)}`;
+  const orderStatusPath =
+    `/checkout/success?orderId=${encodeURIComponent(orderId)}` +
+    (paymentCheckoutUnavailable ? '&paymentCheckout=unavailable' : '');
+
+  const signInHref = `/login?next=${encodeURIComponent(orderStatusPath)}`;
 
   if (!isAuthenticated || !customer || !accessToken) {
     return (
@@ -314,7 +330,14 @@ function SuccessContent() {
     );
   }
 
-  return <OrderLookup key={`${customer.id}:${orderId}`} orderId={orderId} accessToken={accessToken} />;
+  return (
+    <OrderLookup
+      key={`${customer.id}:${orderId}`}
+      orderId={orderId}
+      accessToken={accessToken}
+      paymentCheckoutUnavailable={paymentCheckoutUnavailable}
+    />
+  );
 }
 
 export default function CheckoutSuccessPage() {

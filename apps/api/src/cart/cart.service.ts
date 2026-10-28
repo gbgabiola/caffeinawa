@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -301,13 +302,27 @@ export class CartService {
     });
 
     if (paymentProvider === 'paymongo') {
-      const payment = await this.paymentService.createPayMongoPayment(order.id);
+      try {
+        const payment = await this.paymentService.createPayMongoPayment(
+          order.id,
+        );
 
-      return {
-        order,
-        payment: payment.payment,
-        checkoutUrl: payment.checkoutUrl,
-      };
+        return {
+          order,
+          payment: payment.payment,
+          checkoutUrl: payment.checkoutUrl,
+        };
+      } catch {
+        // Checkout has already committed. Preserve the order reference
+        // without exposing provider errors or creating another session.
+        throw new BadGatewayException({
+          statusCode: 502,
+          code: 'PAYMENT_CHECKOUT_UNAVAILABLE',
+          message:
+            'Your order was created, but payment checkout could not be opened. Check this order before placing another.',
+          orderId: order.id,
+        });
+      }
     }
 
     return order;

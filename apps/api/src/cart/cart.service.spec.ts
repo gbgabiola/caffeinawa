@@ -594,5 +594,36 @@ describe('CartService', () => {
 
       expect(harness.tx.order.create).toHaveBeenCalledOnce();
     });
+
+    it('returns the committed order reference when PayMongo checkout fails', async () => {
+      harness.paymentService.createPayMongoPayment.mockRejectedValueOnce(
+        new Error('Private provider error details'),
+      );
+
+      const error = await harness.service
+        .checkout(customerId, 'paymongo')
+        .catch((cause: unknown) => cause);
+
+      expect(error).toMatchObject({
+        response: {
+          statusCode: 502,
+          code: 'PAYMENT_CHECKOUT_UNAVAILABLE',
+          orderId,
+        },
+      });
+
+      expect(JSON.stringify(error)).not.toContain(
+        'Private provider error details',
+      );
+
+      expect(harness.tx.order.create).toHaveBeenCalledOnce();
+      expect(harness.tx.cartItem.deleteMany).toHaveBeenCalledWith({
+        where: { cartId },
+      });
+
+      expect(
+        harness.paymentService.createPayMongoPayment,
+      ).toHaveBeenCalledExactlyOnceWith(orderId);
+    });
   });
 });

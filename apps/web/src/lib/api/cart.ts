@@ -9,6 +9,12 @@ interface PayMongoCheckoutResponse {
 }
 
 export type CartCheckoutResponse = Order | PayMongoCheckoutResponse;
+export class PaymentCheckoutUnavailableError extends Error {
+  constructor(readonly orderId: string) {
+    super('Your order was created, but payment checkout could not be opened.');
+    this.name = 'PaymentCheckoutUnavailableError';
+  }
+}
 
 function getErrorMessage(status: number, body: string): string {
   if (body) {
@@ -60,6 +66,28 @@ async function request<T>(accessToken: string, path: string, options: RequestIni
   const body = await response.text();
 
   if (!response.ok) {
+    if (response.status === 502) {
+      let details: unknown;
+
+      try {
+        details = JSON.parse(body);
+      } catch {
+        // Fall through to the normal HTTP error below.
+      }
+
+      if (
+        typeof details === 'object' &&
+        details !== null &&
+        'code' in details &&
+        details.code === 'PAYMENT_CHECKOUT_UNAVAILABLE' &&
+        'orderId' in details &&
+        typeof details.orderId === 'string' &&
+        details.orderId.length > 0
+      ) {
+        throw new PaymentCheckoutUnavailableError(details.orderId);
+      }
+    }
+
     throw new Error(getErrorMessage(response.status, body));
   }
 

@@ -8,7 +8,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import QueryProvider from '@/components/providers/QueryProvider';
 import StoreOrderingNotice from '@/features/store/StoreOrderingNotice';
 import { useStoreOrdering } from '@/hooks/useStoreOrdering';
-import { checkoutCart, getCart, isPayMongoCheckoutResponse } from '@/lib/api/cart';
+import { checkoutCart, getCart, isPayMongoCheckoutResponse, PaymentCheckoutUnavailableError } from '@/lib/api/cart';
 import { notifyCartChanged } from '@/lib/cart-events';
 
 import type { Cart, PaymentProvider } from '@caffeinawa/types';
@@ -108,6 +108,15 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
 
       router.replace(`/checkout/success?orderId=${encodeURIComponent(result.id)}`);
     } catch (err) {
+      if (err instanceof PaymentCheckoutUnavailableError) {
+        // The server created the order and cleared the cart.
+        notifyCartChanged(customerId);
+
+        router.replace(`/checkout/success?orderId=${encodeURIComponent(err.orderId)}&paymentCheckout=unavailable`);
+
+        return;
+      }
+
       checkoutInFlight.current = false;
       setSubmitting(false);
 

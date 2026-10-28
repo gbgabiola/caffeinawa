@@ -139,4 +139,26 @@ describe('Checkout order results', () => {
 
     expect(mocks.getOrder).not.toHaveBeenCalled();
   });
+
+  it('explains checkout failure while displaying the existing pending order', async () => {
+    mocks.query = 'orderId=order-1&paymentCheckout=unavailable';
+
+    mocks.getOrder.mockResolvedValue({
+      id: 'order-1',
+      status: 'pending',
+      total: 300,
+    });
+
+    render(<CheckoutSuccessPage />);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Your order is received.',
+      }),
+    ).toBeInTheDocument();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your order already exists.');
+
+    expect(screen.getByRole('alert')).toHaveTextContent('does not confirm whether payment completed');
+  });
 });
