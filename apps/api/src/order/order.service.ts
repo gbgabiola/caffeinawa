@@ -139,15 +139,15 @@ export class OrderService {
       });
 
       const total = items.reduce(
-        (sum, item) => sum + item.unitPrice.toNumber() * item.quantity,
-        0,
+        (sum, item) => sum.add(item.unitPrice.mul(item.quantity)),
+        new Prisma.Decimal(0),
       );
 
       return tx.order.create({
         data: {
           customerId,
           status: PrismaOrderStatus.PENDING,
-          total: new Prisma.Decimal(total),
+          total,
           items: { create: items },
         },
         include: { items: true },

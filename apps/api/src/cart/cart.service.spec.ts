@@ -196,6 +196,24 @@ describe('CartService', () => {
 
       expect(harness.prisma.cart.upsert).not.toHaveBeenCalled();
     });
+
+    it('calculates fractional subtotals and totals with Decimal arithmetic', async () => {
+      harness.prisma.cart.upsert.mockResolvedValue(
+        makeCart([
+          makeCartItem({
+            quantity: 3,
+            coffee: makeCoffee({
+              price: new Prisma.Decimal('0.10'),
+            }),
+          }),
+        ]),
+      );
+
+      const result = await harness.service.findOne(customerId);
+
+      expect(result.items[0]?.subtotal).toBe(0.3);
+      expect(result.total).toBe(0.3);
+    });
   });
 
   describe('addItem', () => {

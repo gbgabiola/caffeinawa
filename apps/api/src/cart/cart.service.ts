@@ -48,11 +48,16 @@ export class CartService {
           imageUrl: item.coffee.imageUrl ?? undefined,
         },
         quantity: item.quantity,
-        subtotal: price * item.quantity,
+        subtotal: item.coffee.price.mul(item.quantity).toNumber(),
       };
     });
 
-    const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const total = cart.items
+      .reduce(
+        (sum, item) => sum.add(item.coffee.price.mul(item.quantity)),
+        new Prisma.Decimal(0),
+      )
+      .toNumber();
 
     return new CartEntity({
       id: cart.id,

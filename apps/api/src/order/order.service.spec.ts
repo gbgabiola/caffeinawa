@@ -408,4 +408,48 @@ describe('OrderService', () => {
       expect(harness.prisma.order.updateMany).not.toHaveBeenCalled();
     });
   });
+
+  describe('create', () => {
+    it('calculates fractional prices without floating-point artifacts', async () => {
+      harness.prisma.customer.findUnique.mockResolvedValue({
+        id: customerId,
+      });
+
+      harness.prisma.coffee.findMany.mockResolvedValue([
+        {
+          id: coffeeId,
+          price: new Prisma.Decimal('0.10'),
+          available: true,
+        },
+      ]);
+
+      harness.prisma.order.create.mockResolvedValue(
+        makeOrder({
+          total: new Prisma.Decimal('0.30'),
+          items: [
+            {
+              id: 'item-1',
+              orderId,
+              coffeeId,
+              quantity: 3,
+              unitPrice: new Prisma.Decimal('0.10'),
+            },
+          ],
+        }),
+      );
+
+      const result = await harness.service.create(customerId, {
+        items: [{ coffeeId, quantity: 3 }],
+      });
+
+      expect(harness.prisma.order.create).toHaveBeenCalledOnce();
+
+      const args = harness.prisma.order.create.mock.calls[0]![0];
+
+      expect(args.data.total.toString()).toBe('0.3');
+      expect(result.total).toBe(0.3);
+      expect(result.items[0]?.quantity).toBe(3);
+      expect(result.items[0]?.unitPrice).toBe(0.1);
+    });
+  });
 });
