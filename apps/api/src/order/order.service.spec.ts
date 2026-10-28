@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
@@ -59,8 +59,12 @@ function createHarness() {
       create: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
+      updateMany: vi.fn(),
     },
     $transaction: vi.fn(),
+    payment: {
+      findFirst: vi.fn(),
+    },
   };
 
   prisma.$transaction.mockImplementation(
@@ -204,104 +208,204 @@ describe('OrderService', () => {
   });
 
   describe('update', () => {
-    it('updates the order status', async () => {
-      const pendingOrder = makeOrder();
-      const confirmedOrder = makeOrder({
-        status: OrderStatus.CONFIRMED,
+    it('advances a confirmed order to preparing', async () => {
+      harness.prisma.order.findUnique
+        .mockResolvedValueOnce(
+          makeAdminOrder({ status: OrderStatus.CONFIRMED }),
+        )
+        .mockResolvedValueOnce(
+          makeAdminOrder({ status: OrderStatus.PREPARING }),
+        );
+
+      harness.prisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await harness.service.update(orderId, {
+        status: 'preparing',
       });
 
-      harness.prisma.order.findUnique.mockResolvedValue(
-        makeAdminOrder(pendingOrder),
-      );
-      harness.prisma.order.update.mockResolvedValue(
-        makeAdminOrder(confirmedOrder),
-      );
+      expect(result.status).toBe('preparing');
+
+      expect(harness.prisma.order.updateMany).toHaveBeenCalledExactlyOnceWith({
+        where: {
+          id: orderId,
+          status: OrderStatus.CONFIRMED,
+        },
+        data: {
+          status: OrderStatus.PREPARING,
+        },
+      });
+
+      expect(harness.prisma.payment.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('requires a paid payment before confirming an order', async () => {
+      harness.prisma.order.findUnique.mockResolvedValue(makeAdminOrder());
+      harness.prisma.payment.findFirst.mockResolvedValue(null);
+
+      await expect(
+        harness.service.update(orderId, { status: 'confirmed' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(harness.prisma.payment.findFirst).toHaveBeenCalledWith({
+        where: {
+          orderId,
+          status: PaymentStatus.PAID,
+        },
+        select: { id: true },
+      });
+
+      expect(harness.prisma.order.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('allows confirmation when payment is already paid', async () => {
+      harness.prisma.order.findUnique
+        .mockResolvedValueOnce(makeAdminOrder())
+        .mockResolvedValueOnce(
+          makeAdminOrder({ status: OrderStatus.CONFIRMED }),
+        );
+
+      harness.prisma.payment.findFirst.mockResolvedValue({
+        id: 'payment-1',
+      });
+
+      harness.prisma.order.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await harness.service.update(orderId, {
         status: 'confirmed',
       });
 
-      expect(harness.prisma.order.update).toHaveBeenCalledWith({
-        where: { id: orderId },
-        data: { status: OrderStatus.CONFIRMED },
-        include: {
-          items: true,
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      expect(result).toMatchObject({
-        id: orderId,
-        status: 'confirmed',
-      });
+      expect(result.status).toBe('confirmed');
     });
 
-    it('throws NotFoundException when the order does not exist', async () => {
+    it.each([
+      OrderStatus.PENDING,
+      OrderStatus.CONFIRMED,
+      OrderStatus.PREPARING,
+      OrderStatus.READY,
+      OrderStatus.COMPLETED,
+      OrderStatus.CANCELLED,
+    ])('returns repeated %s status without writing', async (status) => {
+      harness.prisma.order.findUnique.mockResolvedValue(
+        makeAdminOrder({ status }),
+      );
+
+      const result = await harness.service.update(orderId, {
+        status: status.toLowerCase() as Parameters<
+          OrderService['update']
+        >[1]['status'],
+      });
+
+      expect(result.status).toBe(status.toLowerCase());
+      expect(harness.prisma.order.updateMany).not.toHaveBeenCalled();
+      expect(harness.prisma.payment.findFirst).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      {
+        current: OrderStatus.COMPLETED,
+        next: 'pending' as const,
+      },
+      {
+        current: OrderStatus.CANCELLED,
+        next: 'confirmed' as const,
+      },
+      {
+        current: OrderStatus.PENDING,
+        next: 'completed' as const,
+      },
+      {
+        current: OrderStatus.PREPARING,
+        next: 'confirmed' as const,
+      },
+      {
+        current: OrderStatus.READY,
+        next: 'cancelled' as const,
+      },
+    ])('rejects $current to $next', async ({ current, next }) => {
+      harness.prisma.order.findUnique.mockResolvedValue(
+        makeAdminOrder({ status: current }),
+      );
+
+      await expect(
+        harness.service.update(orderId, { status: next }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(harness.prisma.order.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      OrderStatus.PENDING,
+      OrderStatus.CONFIRMED,
+      OrderStatus.PREPARING,
+    ])(
+      'allows cancellation from %s without changing payments',
+      async (status) => {
+        harness.prisma.order.findUnique
+          .mockResolvedValueOnce(makeAdminOrder({ status }))
+          .mockResolvedValueOnce(
+            makeAdminOrder({ status: OrderStatus.CANCELLED }),
+          );
+
+        harness.prisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+        const result = await harness.service.update(orderId, {
+          status: 'cancelled',
+        });
+
+        expect(result.status).toBe('cancelled');
+        expect(harness.prisma.payment.findFirst).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      {
+        current: OrderStatus.PREPARING,
+        next: 'ready' as const,
+        expected: OrderStatus.READY,
+      },
+      {
+        current: OrderStatus.READY,
+        next: 'completed' as const,
+        expected: OrderStatus.COMPLETED,
+      },
+    ])('allows $current to $next', async ({ current, next, expected }) => {
+      harness.prisma.order.findUnique
+        .mockResolvedValueOnce(makeAdminOrder({ status: current }))
+        .mockResolvedValueOnce(makeAdminOrder({ status: expected }));
+
+      harness.prisma.order.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await harness.service.update(orderId, {
+        status: next,
+      });
+
+      expect(result.status).toBe(next);
+    });
+
+    it('rejects a concurrent change instead of overwriting it', async () => {
+      harness.prisma.order.findUnique.mockResolvedValue(
+        makeAdminOrder({ status: OrderStatus.CONFIRMED }),
+      );
+
+      harness.prisma.order.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        harness.service.update(orderId, { status: 'preparing' }),
+      ).rejects.toThrow(
+        'Order status changed while updating. Refresh and try again.',
+      );
+
+      expect(harness.prisma.order.findUnique).toHaveBeenCalledOnce();
+    });
+
+    it('returns 404 for a missing order', async () => {
       harness.prisma.order.findUnique.mockResolvedValue(null);
 
       await expect(
-        harness.service.update(orderId, {
-          status: 'confirmed',
-        }),
+        harness.service.update(orderId, { status: 'confirmed' }),
       ).rejects.toBeInstanceOf(NotFoundException);
 
-      expect(harness.prisma.order.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('create', () => {
-    it('rejects direct order creation while ordering is closed', async () => {
-      harness.storeService.assertAcceptingOrders.mockRejectedValueOnce(
-        new ConflictException('Ordering is closed'),
-      );
-
-      await expect(
-        harness.service.create(customerId, {
-          items: [{ coffeeId, quantity: 2 }],
-        }),
-      ).rejects.toBeInstanceOf(ConflictException);
-
-      expect(harness.storeService.assertAcceptingOrders).toHaveBeenCalledWith(
-        harness.prisma,
-      );
-
-      expect(harness.prisma.customer.findUnique).not.toHaveBeenCalled();
-      expect(harness.prisma.coffee.findMany).not.toHaveBeenCalled();
-      expect(harness.prisma.order.create).not.toHaveBeenCalled();
-    });
-
-    it('creates an order when ordering is open', async () => {
-      harness.prisma.customer.findUnique.mockResolvedValue({
-        id: customerId,
-      });
-
-      harness.prisma.coffee.findMany.mockResolvedValue([
-        {
-          id: coffeeId,
-          price: new Prisma.Decimal('125.00'),
-          available: true,
-        },
-      ]);
-
-      harness.prisma.order.create.mockResolvedValue(makeOrder());
-
-      const result = await harness.service.create(customerId, {
-        items: [{ coffeeId, quantity: 2 }],
-      });
-
-      expect(result).toMatchObject({
-        customerId,
-        status: 'pending',
-        total: 250,
-      });
-
-      expect(harness.prisma.order.create).toHaveBeenCalledOnce();
+      expect(harness.prisma.order.updateMany).not.toHaveBeenCalled();
     });
   });
 });

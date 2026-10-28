@@ -17,6 +17,14 @@ import { getAdminOrders, updateAdminOrder } from '@/lib/api/admin-orders';
 import type { OrderStatus } from '@caffeinawa/types';
 
 const ORDER_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'];
+const ADMIN_ORDER_ACTIONS: Record<OrderStatus, readonly OrderStatus[]> = {
+  pending: ['cancelled'],
+  confirmed: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['completed'],
+  completed: [],
+  cancelled: [],
+};
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-PH', {
@@ -74,6 +82,10 @@ export default function AdminOrdersPage() {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : 'Unable to update order status.');
+
+      await queryClient.invalidateQueries({
+        queryKey: ['admin', 'orders'],
+      });
     } finally {
       setUpdatingOrderId(null);
     }
@@ -188,11 +200,11 @@ export default function AdminOrdersPage() {
                           <select
                             value={order.status}
                             onChange={event => void handleStatusChange(order.id, event.target.value as OrderStatus)}
-                            disabled={updatingOrderId === order.id}
+                            disabled={updatingOrderId === order.id || ADMIN_ORDER_ACTIONS[order.status].length === 0}
                             className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm capitalize text-gray-700 shadow-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label={`Update status for ${order.customer.name}'s order`}
                           >
-                            {ORDER_STATUSES.map(status => (
+                            {[order.status, ...ADMIN_ORDER_ACTIONS[order.status]].map(status => (
                               <option key={status} value={status}>
                                 {formatStatus(status)}
                               </option>

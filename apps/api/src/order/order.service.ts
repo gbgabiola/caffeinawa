@@ -1,14 +1,20 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, OrderStatus as PrismaOrderStatus } from '@prisma/client';
+import {
+  PaymentStatus,
+  Prisma,
+  OrderStatus as PrismaOrderStatus,
+} from '@prisma/client';
 
 import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
-import { StoreService } from '../store/store.service.js';
 import { OrderEntity } from './entities/order.entity.js';
+import { StoreService } from '../store/store.service.js';
+import { ORDER_TRANSITIONS } from './order-transitions.js';
 
 import type { AdminOrder, Order, OrderStatus } from '@caffeinawa/types';
 import type { AdminOrderQueryDto } from './dto/admin-order-query.dto.js';
@@ -196,13 +202,71 @@ export class OrderService {
   }
 
   async update(id: string, dto: UpdateOrderDto): Promise<AdminOrder> {
-    await this.findOne(id);
-    const order = await this.prisma.order.update({
-      where: { id },
-      data: { status: dto.status.toUpperCase() as PrismaOrderStatus },
-      include: ADMIN_ORDER_INCLUDE,
-    });
+    const nextStatus = dto.status.toUpperCase() as PrismaOrderStatus;
 
-    return this.toAdminEntity(order);
+    return this.prisma.$transaction(async (tx) => {
+      const currentOrder = await tx.order.findUnique({
+        where: { id },
+        include: ADMIN_ORDER_INCLUDE,
+      });
+
+      if (!currentOrder) {
+        throw new NotFoundException(`Order "${id}" not found`);
+      }
+
+      // Repeating the current status is harmless and requires no write.
+      if (currentOrder.status === nextStatus) {
+        return this.toAdminEntity(currentOrder);
+      }
+
+      if (!ORDER_TRANSITIONS[currentOrder.status].includes(nextStatus)) {
+        throw new ConflictException(
+          `Order cannot change from "${currentOrder.status}" to "${nextStatus}"`,
+        );
+      }
+
+      if (nextStatus === PrismaOrderStatus.CONFIRMED) {
+        const paidPayment = await tx.payment.findFirst({
+          where: {
+            orderId: id,
+            status: PaymentStatus.PAID,
+          },
+          select: { id: true },
+        });
+
+        if (!paidPayment) {
+          throw new ConflictException(
+            'Order cannot be confirmed before payment is recorded as paid',
+          );
+        }
+      }
+
+      const updated = await tx.order.updateMany({
+        where: {
+          id,
+          status: currentOrder.status,
+        },
+        data: {
+          status: nextStatus,
+        },
+      });
+
+      if (updated.count !== 1) {
+        throw new ConflictException(
+          'Order status changed while updating. Refresh and try again.',
+        );
+      }
+
+      const updatedOrder = await tx.order.findUnique({
+        where: { id },
+        include: ADMIN_ORDER_INCLUDE,
+      });
+
+      if (!updatedOrder) {
+        throw new NotFoundException(`Order "${id}" not found`);
+      }
+
+      return this.toAdminEntity(updatedOrder);
+    });
   }
 }
