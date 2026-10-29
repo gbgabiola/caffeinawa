@@ -3,7 +3,6 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
-import { StoreService } from '../store/store.service.js';
 import { OrderService } from './order.service.js';
 
 const customerId = 'customer-1';
@@ -72,16 +71,9 @@ function createHarness() {
       callback(prisma),
   );
 
-  const storeService = {
-    assertAcceptingOrders: vi.fn().mockResolvedValue(undefined),
-  };
+  const service = new OrderService(prisma as unknown as PrismaService);
 
-  const service = new OrderService(
-    prisma as unknown as PrismaService,
-    storeService as unknown as StoreService,
-  );
-
-  return { service, prisma, storeService };
+  return { service, prisma };
 }
 
 describe('OrderService', () => {
@@ -406,50 +398,6 @@ describe('OrderService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(harness.prisma.order.updateMany).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('create', () => {
-    it('calculates fractional prices without floating-point artifacts', async () => {
-      harness.prisma.customer.findUnique.mockResolvedValue({
-        id: customerId,
-      });
-
-      harness.prisma.coffee.findMany.mockResolvedValue([
-        {
-          id: coffeeId,
-          price: new Prisma.Decimal('0.10'),
-          available: true,
-        },
-      ]);
-
-      harness.prisma.order.create.mockResolvedValue(
-        makeOrder({
-          total: new Prisma.Decimal('0.30'),
-          items: [
-            {
-              id: 'item-1',
-              orderId,
-              coffeeId,
-              quantity: 3,
-              unitPrice: new Prisma.Decimal('0.10'),
-            },
-          ],
-        }),
-      );
-
-      const result = await harness.service.create(customerId, {
-        items: [{ coffeeId, quantity: 3 }],
-      });
-
-      expect(harness.prisma.order.create).toHaveBeenCalledOnce();
-
-      const args = harness.prisma.order.create.mock.calls[0]![0];
-
-      expect(args.data.total.toString()).toBe('0.3');
-      expect(result.total).toBe(0.3);
-      expect(result.items[0]?.quantity).toBe(3);
-      expect(result.items[0]?.unitPrice).toBe(0.1);
     });
   });
 });

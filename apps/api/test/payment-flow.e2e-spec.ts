@@ -282,7 +282,7 @@ describe('Cash checkout and payment flow (database e2e)', () => {
       .send({
         items: [{ coffeeId, quantity: 1 }],
       })
-      .expect(409);
+      .expect(404);
 
     expect(await prisma.order.count({ where: { customerId } })).toBe(0);
 

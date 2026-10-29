@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -13,15 +12,10 @@ import {
 import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { OrderEntity } from './entities/order.entity.js';
-import { StoreService } from '../store/store.service.js';
 import { ORDER_TRANSITIONS } from './order-transitions.js';
 
 import type { AdminOrder, Order, OrderStatus } from '@caffeinawa/types';
 import type { AdminOrderQueryDto } from './dto/admin-order-query.dto.js';
-import type {
-  CreateOrderDto,
-  CreateOrderItemDto,
-} from './dto/create-order.dto.js';
 import type { UpdateOrderDto } from './dto/update-order.dto.js';
 
 const ADMIN_ORDER_INCLUDE = {
@@ -34,10 +28,7 @@ type AdminOrderRecord = Prisma.OrderGetPayload<{
 
 @Injectable()
 export class OrderService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly storeService: StoreService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
   private toEntity(
     order: Prisma.OrderGetPayload<{
       include: {
@@ -90,69 +81,6 @@ export class OrderService {
     if (!order) {
       throw new NotFoundException(`Order "${id}" not found`);
     }
-
-    return this.toEntity(order);
-  }
-
-  async create(customerId: string, dto: CreateOrderDto): Promise<Order> {
-    const order = await this.prisma.$transaction(async (tx) => {
-      await this.storeService.assertAcceptingOrders(tx);
-
-      const customer = await tx.customer.findUnique({
-        where: { id: customerId },
-      });
-
-      if (!customer) {
-        throw new NotFoundException(`Customer "${customerId}" not found`);
-      }
-
-      const coffeeIds = dto.items.map(
-        (item: CreateOrderItemDto) => item.coffeeId,
-      );
-
-      const coffees = await tx.coffee.findMany({
-        where: { id: { in: coffeeIds } },
-      });
-
-      if (coffees.length !== new Set(coffeeIds).size) {
-        throw new BadRequestException('One or more coffee items do not exist');
-      }
-
-      const unavailableCoffee = coffees.find((coffee) => !coffee.available);
-
-      if (unavailableCoffee) {
-        throw new BadRequestException(
-          `Coffee "${unavailableCoffee.id}" is not currently available`,
-        );
-      }
-
-      const coffeeMap = new Map(coffees.map((coffee) => [coffee.id, coffee]));
-
-      const items = dto.items.map((item) => {
-        const coffee = coffeeMap.get(item.coffeeId)!;
-
-        return {
-          coffeeId: coffee.id,
-          quantity: item.quantity,
-          unitPrice: coffee.price,
-        };
-      });
-
-      const total = items.reduce(
-        (sum, item) => sum.add(item.unitPrice.mul(item.quantity)),
-        new Prisma.Decimal(0),
-      );
-
-      return tx.order.create({
-        data: {
-          customerId,
-          status: PrismaOrderStatus.PENDING,
-          total,
-          items: { create: items },
-        },
-        include: { items: true },
-      });
-    });
 
     return this.toEntity(order);
   }
