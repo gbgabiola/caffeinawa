@@ -5,15 +5,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PaymentProvider, PaymentStatus, Prisma } from '@prisma/client';
+
 import type { Cart, CartItem, Order, OrderStatus } from '@caffeinawa/types';
 
+import { isPayMongoEnabled } from '../config/environment.js';
 import { PrismaService } from '../database/prisma.service.js';
-import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
-import { CartEntity } from './entities/cart.entity.js';
-import type { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 import { PaymentEntity } from '../payment/entities/payment.entity.js';
 import { PaymentService } from '../payment/payment.service.js';
 import { StoreService } from '../store/store.service.js';
+import { CartEntity } from './entities/cart.entity.js';
+
+import type { AddCartItemDto } from './dto/add-cart-item.dto.js';
+import type { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 
 @Injectable()
 export class CartService {
@@ -206,6 +209,12 @@ export class CartService {
         checkoutUrl: string;
       }
   > {
+    if (paymentProvider === 'paymongo' && !isPayMongoEnabled()) {
+      throw new BadRequestException(
+        'PayMongo checkout is currently unavailable. Please choose cash.',
+      );
+    }
+
     const order = await this.prisma.$transaction(async (tx) => {
       await this.storeService.assertAcceptingOrders(tx);
 

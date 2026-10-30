@@ -4,7 +4,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/database/prisma.service.js';
@@ -22,6 +22,7 @@ describe('Cash checkout and payment flow (database e2e)', () => {
   let previousAcceptingOrders: boolean | undefined;
 
   beforeAll(async () => {
+    vi.stubEnv('PAYMONGO_ENABLED', 'true');
     // -------------------------------------------------------
     // 1. Validate test database configuration
     // -------------------------------------------------------
@@ -205,8 +206,12 @@ describe('Cash checkout and payment flow (database e2e)', () => {
           });
         }
       } finally {
-        if (app) {
-          await app.close();
+        try {
+          if (app) {
+            await app.close();
+          }
+        } finally {
+          vi.unstubAllEnvs();
         }
       }
     }

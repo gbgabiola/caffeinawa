@@ -9,7 +9,7 @@ import {
   PaymentStatus,
   Prisma,
 } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentService } from '../payment/payment.service.js';
@@ -128,6 +128,7 @@ describe('CartService', () => {
   let harness: ReturnType<typeof createHarness>;
 
   beforeEach(() => {
+    vi.stubEnv('PAYMONGO_ENABLED', 'true');
     harness = createHarness();
 
     harness.prisma.customer.findUnique.mockResolvedValue({
@@ -143,6 +144,10 @@ describe('CartService', () => {
     harness.tx.cart.findUnique.mockResolvedValue(makeCart([makeCartItem()]));
 
     harness.tx.order.create.mockResolvedValue(makeOrder());
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe('findOne', () => {
@@ -642,6 +647,32 @@ describe('CartService', () => {
       expect(
         harness.paymentService.createPayMongoPayment,
       ).toHaveBeenCalledExactlyOnceWith(orderId);
+    });
+
+    it('rejects disabled PayMongo before creating an order or clearing the cart', async () => {
+      vi.stubEnv('PAYMONGO_ENABLED', 'false');
+
+      await expect(
+        harness.service.checkout(customerId, 'paymongo'),
+      ).rejects.toThrow(
+        'PayMongo checkout is currently unavailable. Please choose cash.',
+      );
+
+      expect(harness.prisma.$transaction).not.toHaveBeenCalled();
+      expect(harness.tx.order.create).not.toHaveBeenCalled();
+      expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
+      expect(
+        harness.paymentService.createPayMongoPayment,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('allows cash checkout when PayMongo is disabled', async () => {
+      vi.stubEnv('PAYMONGO_ENABLED', 'false');
+
+      await harness.service.checkout(customerId, 'cash');
+
+      expect(harness.tx.order.create).toHaveBeenCalledOnce();
+      expect(harness.paymentService.createCashPayment).toHaveBeenCalledOnce();
     });
   });
 });

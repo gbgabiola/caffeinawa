@@ -1,19 +1,23 @@
+import 'dotenv/config';
+
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module.js';
+import { validateEnvironment } from './config/environment.js';
 
 async function bootstrap() {
+  validateEnvironment();
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });
 
   app.enableShutdownHooks();
-
   app.setGlobalPrefix('api');
 
   app.enableCors({
-    origin: process.env.WEB_URL ?? 'http://localhost:3000',
+    origin: new URL(process.env.WEB_URL!).origin,
     credentials: true,
   });
 
@@ -29,7 +33,11 @@ async function bootstrap() {
 
   await app.listen(port);
 
-  console.log(`Caffeinawa API running on http://localhost:${port}`);
+  console.log(`Caffeinawa API listening on port ${port}`);
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : 'API startup failed');
+
+  process.exitCode = 1;
+});

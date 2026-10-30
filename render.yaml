@@ -36,3 +36,6 @@ services:
 
       - key: PAYMONGO_MODE
         value: test
+
+      - key: PAYMONGO_ENABLED
+        sync: false
