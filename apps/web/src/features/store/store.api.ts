@@ -2,10 +2,9 @@ import { adminRequest } from '@/lib/api/admin-client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
-export interface StoreOrderingStatus {
-  acceptingOrders: boolean;
-  updatedAt: string | null;
-}
+import type { StoreOrderingStatus } from '@caffeinawa/types';
+
+export type { StoreOrderingStatus } from '@caffeinawa/types';
 
 export async function getStoreOrdering(): Promise<StoreOrderingStatus> {
   const response = await fetch(`${API_URL}/store/ordering`, {

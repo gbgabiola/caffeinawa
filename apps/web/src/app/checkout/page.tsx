@@ -35,6 +35,8 @@ const paymentMethods: {
   },
 ];
 
+const NO_PAYMENT_METHODS: readonly PaymentProvider[] = [];
+
 interface CustomerCheckoutProps {
   customerId: string;
   accessToken: string;
@@ -46,12 +48,24 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
 
   const acceptingOrders = ordering.data?.acceptingOrders === true && !ordering.isError;
 
+  const enabledPaymentMethods: readonly PaymentProvider[] =
+    !ordering.isPending && !ordering.isError
+      ? (ordering.data?.paymentMethods ?? NO_PAYMENT_METHODS)
+      : NO_PAYMENT_METHODS;
+
+  const availablePaymentMethods = paymentMethods.filter(method => enabledPaymentMethods.includes(method.value));
+
   const checkoutInFlight = useRef(false);
 
   const [cart, setCart] = useState<Cart | null>(null);
   const [loadingCart, setLoadingCart] = useState(true);
   const [refreshCount, setRefreshCount] = useState(0);
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('cash');
+  const selectedPaymentProvider = enabledPaymentMethods.includes(paymentProvider)
+    ? paymentProvider
+    : availablePaymentMethods[0]?.value;
+
+  const canCheckout = acceptingOrders && selectedPaymentProvider !== undefined;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,7 +103,14 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
   const hasUnavailableItem = cart?.items.some(item => !item.coffee.available) ?? false;
 
   async function handleCheckout() {
-    if (!cart || cart.items.length === 0 || !acceptingOrders || hasUnavailableItem || checkoutInFlight.current) {
+    if (
+      !cart ||
+      cart.items.length === 0 ||
+      !canCheckout ||
+      !selectedPaymentProvider ||
+      hasUnavailableItem ||
+      checkoutInFlight.current
+    ) {
       return;
     }
 
@@ -98,7 +119,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
     setError(null);
 
     try {
-      const result = await checkoutCart(accessToken, customerId, paymentProvider);
+      const result = await checkoutCart(accessToken, customerId, selectedPaymentProvider);
       notifyCartChanged(customerId);
 
       if (isPayMongoCheckoutResponse(result)) {
@@ -208,8 +229,8 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
                   <legend className="sr-only">Payment method</legend>
 
                   <div className="grid gap-3">
-                    {paymentMethods.map(method => {
-                      const selected = paymentProvider === method.value;
+                    {availablePaymentMethods.map(method => {
+                      const selected = selectedPaymentProvider === method.value;
 
                       return (
                         <label
@@ -237,6 +258,12 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
                     })}
                   </div>
                 </fieldset>
+
+                {!ordering.isPending && !ordering.isError && availablePaymentMethods.length === 0 && (
+                  <p role="status" className="mt-4 text-sm text-cafe-muted">
+                    No payment methods are currently available.
+                  </p>
+                )}
               </section>
 
               <section
@@ -299,28 +326,32 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
               <button
                 type="button"
                 onClick={() => void handleCheckout()}
-                disabled={submitting || hasUnavailableItem || !acceptingOrders}
+                disabled={submitting || hasUnavailableItem || !canCheckout}
                 className="mt-6 flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting
-                  ? paymentProvider === 'paymongo'
+                  ? selectedPaymentProvider === 'paymongo'
                     ? 'Redirecting...'
                     : 'Placing order...'
-                  : !acceptingOrders
-                    ? ordering.isPending
-                      ? 'Checking availability...'
-                      : ordering.isError
-                        ? 'Ordering availability unavailable'
-                        : 'Ordering is closed'
-                    : paymentProvider === 'paymongo'
-                      ? 'Continue to PayMongo'
-                      : 'Place cash order'}
+                  : ordering.isPending
+                    ? 'Checking availability...'
+                    : ordering.isError
+                      ? 'Ordering availability unavailable'
+                      : !acceptingOrders
+                        ? 'Ordering is closed'
+                        : !selectedPaymentProvider
+                          ? 'No payment methods available'
+                          : selectedPaymentProvider === 'paymongo'
+                            ? 'Continue to PayMongo'
+                            : 'Place cash order'}
               </button>
 
               <p className="mt-4 text-center text-xs leading-6 text-cafe-muted">
-                {paymentProvider === 'paymongo'
+                {selectedPaymentProvider === 'paymongo'
                   ? 'You will leave Caffeinawa to complete payment on PayMongo.'
-                  : 'Your order will be placed with cash as the payment method.'}
+                  : selectedPaymentProvider === 'cash'
+                    ? 'Your order will be placed with cash as the payment method.'
+                    : 'Choose an available payment method to continue.'}
               </p>
             </aside>
           </div>

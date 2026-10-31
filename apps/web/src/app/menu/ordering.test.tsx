@@ -63,6 +63,7 @@ beforeEach(() => {
   mocks.getOrdering.mockResolvedValue({
     acceptingOrders: false,
     updatedAt: null,
+    paymentMethods: ['cash'],
   });
 });
 

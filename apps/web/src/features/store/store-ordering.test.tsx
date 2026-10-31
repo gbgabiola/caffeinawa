@@ -30,6 +30,7 @@ function makeStatus(acceptingOrders: boolean): StoreOrderingStatus {
   return {
     acceptingOrders,
     updatedAt: '2026-10-26T00:00:00.000Z',
+    paymentMethods: ['cash'],
   };
 }
 

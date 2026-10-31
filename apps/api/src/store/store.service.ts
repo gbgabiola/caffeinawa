@@ -2,6 +2,9 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../database/prisma.service.js';
+import { isPayMongoEnabled } from '../config/environment.js';
+
+import type { PaymentProvider, StoreOrderingStatus } from '@caffeinawa/types';
 
 const STORE_ID = 'main';
 
@@ -9,7 +12,11 @@ const STORE_ID = 'main';
 export class StoreService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOrdering() {
+  private getPaymentMethods(): PaymentProvider[] {
+    return isPayMongoEnabled() ? ['cash', 'paymongo'] : ['cash'];
+  }
+
+  async getOrdering(): Promise<StoreOrderingStatus> {
     const settings = await this.prisma.storeSettings.findUnique({
       where: { id: STORE_ID },
     });
@@ -17,10 +24,11 @@ export class StoreService {
     return {
       acceptingOrders: settings?.acceptingOrders ?? false,
       updatedAt: settings?.updatedAt.toISOString() ?? null,
+      paymentMethods: this.getPaymentMethods(),
     };
   }
 
-  async setOrdering(acceptingOrders: boolean) {
+  async setOrdering(acceptingOrders: boolean): Promise<StoreOrderingStatus> {
     const settings = await this.prisma.storeSettings.upsert({
       where: { id: STORE_ID },
       create: {
@@ -35,6 +43,7 @@ export class StoreService {
     return {
       acceptingOrders: settings.acceptingOrders,
       updatedAt: settings.updatedAt.toISOString(),
+      paymentMethods: this.getPaymentMethods(),
     };
   }
 
