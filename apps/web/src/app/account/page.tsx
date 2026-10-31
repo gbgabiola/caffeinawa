@@ -280,6 +280,14 @@ export default function AccountPage() {
                 <span aria-hidden="true">↗</span>
               </Link>
 
+              <Link
+                href="/orders"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 text-sm font-medium hover:bg-cafe-cream"
+              >
+                View your orders
+                <span aria-hidden="true">↗</span>
+              </Link>
+
               {customer.role === 'ADMIN' && (
                 <Link
                   href="/admin"

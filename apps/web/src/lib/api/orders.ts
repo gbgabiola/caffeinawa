@@ -24,3 +24,20 @@ export async function getOrder(accessToken: string, orderId: string): Promise<Or
 
   return response.json();
 }
+
+export async function getOrders(accessToken: string): Promise<Order[]> {
+  const response = await fetch(`${API_URL}/orders`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      response.status === 401 ? 'Your session has expired. Please sign in again.' : 'Unable to load your orders.',
+    );
+  }
+
+  return response.json() as Promise<Order[]>;
+}

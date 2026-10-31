@@ -23,6 +23,7 @@ export function Header() {
       ? hasSession
         ? [
             { href: '/account', label: 'Account' },
+            { href: '/orders', label: 'Orders' },
             ...(customer?.role === 'ADMIN' ? [{ href: '/admin', label: 'Admin' }] : []),
           ]
         : [
