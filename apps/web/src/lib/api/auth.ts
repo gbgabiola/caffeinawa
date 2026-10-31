@@ -46,6 +46,10 @@ export async function register(input: RegisterInput): Promise<Customer> {
     body: JSON.stringify(input),
   });
 
+  if (response.status === 429) {
+    throw new AuthRequestError(429, 'Too many attempts. Please wait a minute and try again.');
+  }
+
   if (!response.ok) {
     throw new Error('Failed to register');
   }
@@ -61,6 +65,10 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
     },
     body: JSON.stringify(input),
   });
+
+  if (response.status === 429) {
+    throw new AuthRequestError(429, 'Too many attempts. Please wait a minute and try again.');
+  }
 
   if (!response.ok) {
     throw new Error('Invalid email or password');

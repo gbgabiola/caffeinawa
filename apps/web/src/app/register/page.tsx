@@ -4,9 +4,10 @@ import { Suspense, useEffect, useState, type ComponentProps } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import AuthShell from '@/components/auth/AuthShell';
 import { useAuth } from '@/components/auth/AuthProvider';
+import AuthShell from '@/components/auth/AuthShell';
 import FormField from '@/components/ui/FormField';
+import { AuthRequestError } from '@/lib/api/auth';
 import { getSafeReturnPath } from '@/lib/auth-redirect';
 
 type FormSubmitHandler = NonNullable<ComponentProps<'form'>['onSubmit']>;
@@ -72,8 +73,13 @@ function RegisterContent() {
       });
 
       router.replace(`${loginHref}&registered=1`);
-    } catch {
-      setError('Unable to create your account. Check your information and try again.');
+    } catch (error) {
+      setError(
+        error instanceof AuthRequestError && error.status === 429
+          ? error.message
+          : 'Unable to create your account. Check your information and try again.',
+      );
+
       setIsSubmitting(false);
     }
   };

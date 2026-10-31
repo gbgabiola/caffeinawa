@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import AuthShell from '@/components/auth/AuthShell';
 import FormField from '@/components/ui/FormField';
+import { AuthRequestError } from '@/lib/api/auth';
 import { getSafeReturnPath } from '@/lib/auth-redirect';
 
 type FormSubmitHandler = NonNullable<ComponentProps<'form'>['onSubmit']>;
@@ -61,8 +62,12 @@ function LoginContent() {
 
       // AuthProvider updates authentication state.
       // The effect above handles navigation.
-    } catch {
-      setError('Unable to sign in. Check your email and password, then try again.');
+    } catch (error) {
+      setError(
+        error instanceof AuthRequestError && error.status === 429
+          ? error.message
+          : 'Unable to sign in. Check your email and password, then try again.',
+      );
     } finally {
       setIsSubmitting(false);
     }
