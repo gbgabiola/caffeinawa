@@ -14,6 +14,22 @@ export interface AuthenticatedRequest extends Request {
   user: JwtPayload;
 }
 
+function isJwtPayload(value: unknown): value is JwtPayload {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const payload = value as Record<string, unknown>;
+
+  return (
+    typeof payload.sub === 'string' &&
+    payload.sub.trim().length > 0 &&
+    typeof payload.email === 'string' &&
+    payload.email.trim().length > 0 &&
+    (payload.role === 'CUSTOMER' || payload.role === 'ADMIN')
+  );
+}
+
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(private readonly jwtService: JwtService) {}
@@ -34,7 +50,13 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
+      const payload: unknown = await this.jwtService.verifyAsync(token, {
+        algorithms: ['HS256'],
+      });
+
+      if (!isJwtPayload(payload)) {
+        throw new UnauthorizedException('Invalid access token claims');
+      }
 
       request.user = payload;
 
