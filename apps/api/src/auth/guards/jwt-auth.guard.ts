@@ -26,7 +26,10 @@ function isJwtPayload(value: unknown): value is JwtPayload {
     payload.sub.trim().length > 0 &&
     typeof payload.email === 'string' &&
     payload.email.trim().length > 0 &&
-    (payload.role === 'CUSTOMER' || payload.role === 'ADMIN')
+    (payload.role === 'CUSTOMER' || payload.role === 'ADMIN') &&
+    typeof payload.exp === 'number' &&
+    Number.isSafeInteger(payload.exp) &&
+    payload.exp > 0
   );
 }
 

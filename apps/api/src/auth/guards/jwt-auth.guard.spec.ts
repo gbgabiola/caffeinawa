@@ -110,4 +110,43 @@ describe('JwtAuthGuard claims validation', () => {
       UnauthorizedException,
     );
   });
+
+  it('rejects a signed token without an expiry', async () => {
+    const token = await jwtService.signAsync({
+      sub: 'customer-1',
+      email: 'customer@example.com',
+      role: 'CUSTOMER',
+    });
+
+    const { request, context } = makeRequest(token);
+    const guard = new JwtAuthGuard(jwtService);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+
+    expect(request.user).toBeUndefined();
+  });
+
+  it('rejects an expired token', async () => {
+    const token = await jwtService.signAsync(
+      {
+        sub: 'customer-1',
+        email: 'customer@example.com',
+        role: 'CUSTOMER',
+      },
+      {
+        expiresIn: -1,
+      },
+    );
+
+    const { request, context } = makeRequest(token);
+    const guard = new JwtAuthGuard(jwtService);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+
+    expect(request.user).toBeUndefined();
+  });
 });
