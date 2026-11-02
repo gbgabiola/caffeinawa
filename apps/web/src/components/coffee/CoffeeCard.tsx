@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useMenuCart } from '@/hooks/useMenuCart';
 
+import { MAX_CART_ITEM_QUANTITY } from '@caffeinawa/types';
 import type { Coffee } from '@caffeinawa/types';
 
 interface CoffeeCardProps {
@@ -83,7 +84,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
       return;
     }
 
-    if (loadingCart || updating || !coffee.available) {
+    if (loadingCart || updating || !coffee.available || quantity >= MAX_CART_ITEM_QUANTITY) {
       return;
     }
 
@@ -158,7 +159,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
           >
             <button
               type="button"
-              aria-label="Decrease quantity"
+              aria-label={quantity > MAX_CART_ITEM_QUANTITY ? `Reduce quantity to ${MAX_CART_ITEM_QUANTITY}` : 'Decrease quantity'}
               disabled={updating}
               onClick={() => void handleDecrement()}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-cafe-espresso hover:bg-cafe-soft disabled:opacity-40"
@@ -176,7 +177,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
             <button
               type="button"
               aria-label="Increase quantity"
-              disabled={updating}
+              disabled={updating || quantity >= MAX_CART_ITEM_QUANTITY}
               onClick={() => void handleIncrement()}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-cafe-espresso hover:bg-cafe-soft disabled:opacity-40"
             >
@@ -192,6 +193,13 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
           >
             {updating ? 'Adding...' : isAuthenticated ? 'Add to cart' : 'Sign In'}
           </button>
+        )}
+
+        {quantity >= MAX_CART_ITEM_QUANTITY && (
+          <p role="status" className="mt-3 text-xs leading-5 text-cafe-muted">
+            Maximum {MAX_CART_ITEM_QUANTITY} drinks per coffee.
+            {quantity > MAX_CART_ITEM_QUANTITY && ` Use minus to reduce to ${MAX_CART_ITEM_QUANTITY}, or remove it from your cart.`}
+          </p>
         )}
 
         {error && (

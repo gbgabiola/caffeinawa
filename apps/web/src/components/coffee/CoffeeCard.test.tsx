@@ -343,3 +343,26 @@ describe('CoffeeCard shared cart', () => {
     });
   });
 });
+
+describe('CoffeeCard quantity limits', () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+  it('allows adding the 99th drink and disables further increments', async () => {
+    mocks.addCartItem.mockResolvedValueOnce(makeCart(99));
+    const user = await renderLoadedCard(98);
+    await user.click(screen.getByRole('button', { name: 'Increase quantity' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Increase quantity' })).toBeDisabled());
+    expect(screen.getByText('Maximum 99 drinks per coffee.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Decrease quantity' })).toBeEnabled();
+  });
+
+  it('explicitly corrects a legacy quantity above 99', async () => {
+    mocks.updateCartItem.mockResolvedValueOnce(makeCart(99));
+    mocks.getCart.mockResolvedValue(makeCart(101));
+    const { user } = renderWithCart(<CoffeeCard coffee={coffee} />);
+    const reduce = await screen.findByRole('button', { name: 'Reduce quantity to 99' });
+    expect(screen.getByRole('button', { name: 'Increase quantity' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Use minus to reduce to 99');
+    await user.click(reduce);
+    await waitFor(() => expect(mocks.updateCartItem).toHaveBeenCalledWith('customer-token', 'customer-1', 'cart-item-1', 99));
+  });
+});

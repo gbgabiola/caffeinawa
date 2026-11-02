@@ -80,7 +80,7 @@ function makeOrder() {
 
 function createHarness() {
   const tx = {
-    $queryRaw: vi.fn().mockResolvedValue([]),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: cartId }]),
 
     customer: { findUnique: vi.fn() },
     cart: { findUnique: vi.fn() },
@@ -91,7 +91,7 @@ function createHarness() {
 
   const prisma = {
     customer: { findUnique: vi.fn() },
-    cart: { upsert: vi.fn() },
+    cart: { createMany: vi.fn(), findUniqueOrThrow: vi.fn() },
     coffee: { findUnique: vi.fn() },
     cartItem: {
       upsert: vi.fn(),
@@ -105,6 +105,15 @@ function createHarness() {
         callback(tx),
     ),
   };
+
+  Object.assign(tx, {
+    coffee: prisma.coffee,
+    cartItem: prisma.cartItem,
+  });
+  Object.assign(tx.cart, {
+    createMany: prisma.cart.createMany,
+    findUniqueOrThrow: prisma.cart.findUniqueOrThrow,
+  });
 
   const paymentService = {
     createCashPayment: vi.fn(),
@@ -135,7 +144,7 @@ describe('CartService', () => {
       id: customerId,
     });
 
-    harness.prisma.cart.upsert.mockResolvedValue(makeCart());
+    harness.prisma.cart.findUniqueOrThrow.mockResolvedValue(makeCart());
 
     harness.tx.customer.findUnique.mockResolvedValue({
       id: customerId,
@@ -152,7 +161,9 @@ describe('CartService', () => {
 
   describe('findOne', () => {
     it('returns cart items with calculated subtotals and total', async () => {
-      harness.prisma.cart.upsert.mockResolvedValue(makeCart([makeCartItem()]));
+      harness.prisma.cart.findUniqueOrThrow.mockResolvedValue(
+        makeCart([makeCartItem()]),
+      );
 
       const result = await harness.service.findOne(customerId);
 
@@ -175,10 +186,8 @@ describe('CartService', () => {
         ],
       });
 
-      expect(harness.prisma.cart.upsert).toHaveBeenCalledWith({
+      expect(harness.prisma.cart.findUniqueOrThrow).toHaveBeenCalledWith({
         where: { customerId },
-        create: { customerId },
-        update: {},
         include: {
           items: { include: { coffee: true } },
         },
@@ -199,11 +208,11 @@ describe('CartService', () => {
         NotFoundException,
       );
 
-      expect(harness.prisma.cart.upsert).not.toHaveBeenCalled();
+      expect(harness.prisma.cart.createMany).not.toHaveBeenCalled();
     });
 
     it('calculates fractional subtotals and totals with Decimal arithmetic', async () => {
-      harness.prisma.cart.upsert.mockResolvedValue(
+      harness.prisma.cart.findUniqueOrThrow.mockResolvedValue(
         makeCart([
           makeCartItem({
             quantity: 3,
@@ -218,6 +227,50 @@ describe('CartService', () => {
 
       expect(result.items[0]?.subtotal).toBe(0.3);
       expect(result.total).toBe(0.3);
+    });
+  });
+
+  describe('quantity validation', () => {
+    it.each([0, -1, 1.5, 100, Number.MAX_SAFE_INTEGER, NaN, Infinity])(
+      'rejects invalid quantity %s before database writes',
+      async (quantity) => {
+        await expect(
+          harness.service.addItem(customerId, { coffeeId, quantity }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        await expect(
+          harness.service.updateItem(customerId, itemId, { quantity }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(harness.prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects accumulated quantities above the limit without writing', async () => {
+      harness.prisma.coffee.findUnique.mockResolvedValue(makeCoffee());
+      harness.prisma.cartItem.findFirst.mockResolvedValue(
+        makeCartItem({ quantity: 99 }),
+      );
+      await expect(
+        harness.service.addItem(customerId, { coffeeId, quantity: 1 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(harness.prisma.cartItem.upsert).not.toHaveBeenCalled();
+    });
+
+    it('accepts the upper boundary for a new item', async () => {
+      harness.prisma.coffee.findUnique.mockResolvedValue(makeCoffee());
+      await harness.service.addItem(customerId, { coffeeId, quantity: 99 });
+      expect(harness.prisma.cartItem.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: { cartId, coffeeId, quantity: 99 } }),
+      );
+    });
+
+    it('locks the cart before reading an existing item', async () => {
+      harness.prisma.coffee.findUnique.mockResolvedValue(makeCoffee());
+      harness.tx.$queryRaw.mockImplementationOnce(async () => {
+        expect(harness.prisma.cartItem.findFirst).not.toHaveBeenCalled();
+        return [{ id: cartId }];
+      });
+      await harness.service.addItem(customerId, { coffeeId, quantity: 1 });
+      expect(harness.tx.$queryRaw).toHaveBeenCalledOnce();
     });
   });
 
@@ -349,6 +402,21 @@ describe('CartService', () => {
   });
 
   describe('checkout', () => {
+    it.each([0, -1, 1.5, 100])(
+      'rejects legacy invalid quantity %s before any order or payment',
+      async (quantity) => {
+        harness.tx.cart.findUnique.mockResolvedValue(
+          makeCart([makeCartItem({ quantity })]),
+        );
+        await expect(
+          harness.service.checkout(customerId, 'cash'),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(harness.tx.order.create).not.toHaveBeenCalled();
+        expect(harness.paymentService.createCashPayment).not.toHaveBeenCalled();
+        expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
+      },
+    );
+
     it('rejects checkout for a missing customer', async () => {
       harness.tx.customer.findUnique.mockResolvedValue(null);
 
@@ -602,7 +670,7 @@ describe('CartService', () => {
         expect(harness.tx.cart.findUnique).not.toHaveBeenCalled();
         expect(harness.tx.order.create).not.toHaveBeenCalled();
 
-        return [];
+        return [{ id: cartId }];
       });
 
       await harness.service.checkout(customerId, 'cash');

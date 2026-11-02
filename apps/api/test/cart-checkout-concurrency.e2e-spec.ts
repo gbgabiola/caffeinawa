@@ -1,6 +1,11 @@
 import { BadRequestException, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
+import {
+  OrderStatus,
+  PaymentProvider,
+  PaymentStatus,
+  Prisma,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -139,6 +144,156 @@ describe('Concurrent cart checkout (database e2e)', () => {
       }
     }
   });
+
+  async function resetCart(quantity = 2) {
+    if (!customerId || !coffeeId) throw new Error('Missing fixtures');
+    const cart = await prisma.cart.findUniqueOrThrow({ where: { customerId } });
+    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+    await prisma.cartItem.create({
+      data: { cartId: cart.id, coffeeId, quantity },
+    });
+  }
+
+  it('serializes simultaneous additions when the customer has no cart yet', async () => {
+    if (!customerId || !coffeeId) throw new Error('Missing fixtures');
+    await prisma.cart.deleteMany({ where: { customerId } });
+    try {
+      await Promise.all([
+        cartService.addItem(customerId, { coffeeId, quantity: 48 }),
+        cartService.addItem(customerId, { coffeeId, quantity: 51 }),
+      ]);
+      const cart = await cartService.findOne(customerId);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0]!.quantity).toBe(99);
+    } finally {
+      await resetCart();
+    }
+  }, 20_000);
+
+  it('serializes first additions and rejects an accumulated quantity above 99', async () => {
+    if (!customerId || !coffeeId) throw new Error('Missing fixtures');
+    const cart = await prisma.cart.findUniqueOrThrow({ where: { customerId } });
+    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+    try {
+      await Promise.all([
+        cartService.addItem(customerId, { coffeeId, quantity: 48 }),
+        cartService.addItem(customerId, { coffeeId, quantity: 51 }),
+      ]);
+      await expect(
+        cartService.addItem(customerId, { coffeeId, quantity: 1 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      const items = await prisma.cartItem.findMany({
+        where: { cartId: cart.id },
+      });
+      expect(items).toHaveLength(1);
+      expect(items[0]!.quantity).toBe(99);
+    } finally {
+      await resetCart();
+    }
+  }, 20_000);
+
+  it('allows only one concurrent increment from 98 to 99', async () => {
+    if (!customerId || !coffeeId) throw new Error('Missing fixtures');
+    await resetCart(98);
+    try {
+      const results = await Promise.allSettled([
+        cartService.addItem(customerId, { coffeeId, quantity: 1 }),
+        cartService.addItem(customerId, { coffeeId, quantity: 1 }),
+      ]);
+      expect(
+        results.filter((result) => result.status === 'fulfilled'),
+      ).toHaveLength(1);
+      const failed = results.find((result) => result.status === 'rejected');
+      expect(failed?.status === 'rejected' && failed.reason).toBeInstanceOf(
+        BadRequestException,
+      );
+      const cart = await cartService.findOne(customerId);
+      expect(cart.items).toHaveLength(1);
+      expect(cart.items[0]!.quantity).toBe(99);
+    } finally {
+      await resetCart();
+    }
+  }, 20_000);
+
+  it('keeps a concurrent absolute update and addition within the limit', async () => {
+    if (!customerId || !coffeeId) throw new Error('Missing fixtures');
+    await resetCart(98);
+    try {
+      const cart = await cartService.findOne(customerId);
+      const results = await Promise.allSettled([
+        cartService.updateItem(customerId, cart.items[0]!.id, { quantity: 99 }),
+        cartService.addItem(customerId, { coffeeId, quantity: 1 }),
+      ]);
+      expect(results[0]!.status).toBe('fulfilled');
+      if (results[1]!.status === 'rejected') {
+        expect(results[1]!.reason).toBeInstanceOf(BadRequestException);
+      }
+      expect((await cartService.findOne(customerId)).items[0]!.quantity).toBe(
+        99,
+      );
+    } finally {
+      await resetCart();
+    }
+  }, 20_000);
+
+  it('rejects legacy over-limit checkout and permits explicit correction', async () => {
+    if (!customerId) throw new Error('Missing fixtures');
+    await resetCart(101);
+    try {
+      await expect(
+        cartService.checkout(customerId, 'cash'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(await prisma.order.count({ where: { customerId } })).toBe(0);
+      const cart = await cartService.findOne(customerId);
+      expect(cart.items[0]!.quantity).toBe(101);
+      const corrected = await cartService.updateItem(
+        customerId,
+        cart.items[0]!.id,
+        { quantity: 99 },
+      );
+      expect(corrected.items[0]!.quantity).toBe(99);
+    } finally {
+      await resetCart();
+    }
+  }, 20_000);
+
+  it('preserves a concurrent addition either in the order or the remaining cart', async () => {
+    if (!customerId || !coffeeId) throw new Error('Missing fixtures');
+    await resetCart(1);
+    try {
+      const [order] = await Promise.all([
+        cartService.checkout(customerId, 'cash'),
+        cartService.addItem(customerId, { coffeeId, quantity: 2 }),
+      ]);
+      expect('items' in order).toBe(true);
+      const orders = await prisma.order.findMany({
+        where: { customerId },
+        include: { items: true, payments: true },
+      });
+      const cart = await cartService.findOne(customerId);
+      expect(orders).toHaveLength(1);
+      const orderedQuantity = orders[0]!.items.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      const remainingQuantity = cart.items.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      expect(orderedQuantity + remainingQuantity).toBe(3);
+      expect(orders[0]!.total.toString()).toBe(
+        new Prisma.Decimal('125.50').mul(orderedQuantity).toString(),
+      );
+      expect(orders[0]!.payments).toHaveLength(1);
+      expect(orders[0]!.payments[0]!.amount.toString()).toBe(
+        orders[0]!.total.toString(),
+      );
+    } finally {
+      await prisma.payment.deleteMany({ where: { order: { customerId } } });
+      await prisma.order.deleteMany({ where: { customerId } });
+      await resetCart();
+    }
+  }, 20_000);
 
   it('creates one order and payment from simultaneous checkouts', async () => {
     if (!customerId || !coffeeId) {
