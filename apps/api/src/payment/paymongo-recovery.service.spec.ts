@@ -50,18 +50,18 @@ afterEach(() => {
 });
 
 describe('PayMongo recovery transport', () => {
-  it('replays exactly the stored body and key, including after callback configuration changes', async () => {
+  it('sends the stored body and key, including after callback configuration changes', async () => {
     const snapshot = {
       ...service.prepareCheckoutSession(input),
       paymentId,
       createdAt: now,
+      startedAt: now,
     };
     vi.stubEnv('WEB_URL', 'https://new.example.test');
     service = new PayMongoService();
     fetchMock.mockImplementation(async () => Response.json(payload()));
     await service.createCheckoutSession(snapshot, input.orderId);
-    await service.createCheckoutSession(snapshot, input.orderId);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     for (const call of fetchMock.mock.calls) {
       expect(call[0]).toBe('https://api.paymongo.com/v2/checkout_sessions');
       expect(call[1]?.body).toBe(snapshot.requestBody);
@@ -78,6 +78,7 @@ describe('PayMongo recovery transport', () => {
         ...service.prepareCheckoutSession(input),
         paymentId,
         createdAt: new Date(now.getTime() - hours * 3600000),
+        startedAt: now,
       };
       await expect(
         service.createCheckoutSession(snapshot, input.orderId),
@@ -93,6 +94,7 @@ describe('PayMongo recovery transport', () => {
         ...service.prepareCheckoutSession(input),
         paymentId,
         createdAt: now,
+        startedAt: now,
       };
       vi.stubEnv(
         name,

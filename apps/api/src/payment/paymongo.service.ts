@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
-const RECOVERY_WINDOW_MS = 23 * 60 * 60 * 1000;
+const CREATION_WINDOW_MS = 23 * 60 * 60 * 1000;
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -130,14 +130,14 @@ export class PayMongoService {
     };
   }
 
-  canRecoverCreation(attempt: { scopeHash: string; createdAt: Date }): boolean {
+  canStartCreation(attempt: { scopeHash: string; createdAt: Date }): boolean {
     try {
       const elapsed = Date.now() - attempt.createdAt.getTime();
       return (
         attempt.scopeHash === this.configuration().scopeHash &&
         Number.isFinite(elapsed) &&
         elapsed >= -60_000 &&
-        elapsed < RECOVERY_WINDOW_MS
+        elapsed < CREATION_WINDOW_MS
       );
     } catch {
       return false;
@@ -145,14 +145,18 @@ export class PayMongoService {
   }
 
   async createCheckoutSession(
-    attempt: PreparedCheckoutSession & { paymentId: string; createdAt: Date },
+    attempt: PreparedCheckoutSession & {
+      paymentId: string;
+      createdAt: Date;
+      startedAt: Date;
+    },
     orderId: string,
   ) {
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
         attempt.paymentId,
       ) ||
-      !this.canRecoverCreation(attempt)
+      !this.canStartCreation(attempt)
     ) {
       throw new ConflictException(
         'This payment needs review by the store. No new checkout session was created.',

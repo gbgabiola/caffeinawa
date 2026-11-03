@@ -210,9 +210,10 @@ model CheckoutRequest {
 
 // Immutable creation request. Never recreate or expire independently of payment.
 model PayMongoCheckoutAttempt {
-  paymentId   String   @id
+  startedAt   DateTime?
+  paymentId   String    @id
   requestBody String
   scopeHash   String
-  createdAt   DateTime @default(now())
-  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  payment     Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 }

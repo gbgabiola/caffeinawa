@@ -19,7 +19,7 @@ import { PrismaService } from '../src/database/prisma.service.js';
 import { PayMongoService } from '../src/payment/paymongo.service.js';
 import { PayMongoCheckoutService } from '../src/payment/paymongo-checkout.service.js';
 
-describe('PayMongo recovery (isolated database, simulated provider)', () => {
+describe('PayMongo recovery (isolated database, non-idempotent simulated provider)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let cart: CartService;
@@ -122,15 +122,16 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
               where: { paymentId: key },
             });
           expect(persisted.requestBody).toBe(body);
+          expect(persisted.startedAt).not.toBeNull();
           expect(await prisma.order.count({ where: { customerId } })).toBe(1);
           calls.push({ method: 'POST', key, body });
-          const existing = sessions.get(key);
-          if (existing) expect(existing.body).toBe(body);
-          const session = existing ?? {
+          // Match observed sandbox behavior: every POST makes a distinct session,
+          // even if its idempotency header and payload are identical.
+          const session = {
             id: `cs_${randomUUID().replaceAll('-', '')}`,
             body,
           };
-          sessions.set(key, session);
+          sessions.set(session.id, session);
           if (loseResponse) {
             loseResponse = false;
             throw new TypeError(
@@ -232,7 +233,7 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
       .post(`/api/orders/${orderId}/payment-checkout/resume`)
       .set('Authorization', `Bearer ${token}`);
 
-  it('recovers an ambiguous creation with the same key/body after profile changes and a refilled cart', async () => {
+  it('never repeats an ambiguous creation after profile changes and a refilled cart', async () => {
     const orderId = await checkout(true);
     const refilled = await cart.addItem(customerId, { coffeeId, quantity: 3 });
     await prisma.customer.update({
@@ -243,11 +244,11 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
       where: { id: 'main' },
       data: { acceptingOrders: false },
     });
-    expect((await recovery.status(customerId, orderId)).canResume).toBe(true);
-    const result = await recovery.resume(customerId, orderId);
-    expect(result.status).toBe('ready');
-    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(2);
-    expect(calls[0]).toEqual(calls[1]);
+    expect((await recovery.status(customerId, orderId)).canResume).toBe(false);
+    await expect(recovery.resume(customerId, orderId)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
     expect(sessions.size).toBe(1);
     expect(await cart.findOne(customerId)).toEqual(refilled);
     expect(await prisma.payment.count({ where: { orderId } })).toBe(1);
@@ -256,8 +257,10 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
 
   it('recovers safely before the first external creation request after a checkout-process crash', async () => {
     const spy = vi
-      .spyOn(app.get(PayMongoService), 'createCheckoutSession')
-      .mockRejectedValueOnce(new Error('Simulated crash before HTTP'));
+      .spyOn(recovery, 'create')
+      .mockRejectedValueOnce(
+        new Error('Simulated crash before creation claim'),
+      );
     const orderId = await checkout(true);
     expect(calls).toHaveLength(0);
     spy.mockRestore();
@@ -266,14 +269,27 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
     expect(sessions.size).toBe(1);
   });
 
-  it('serializes concurrent recovery results to one persisted provider session', async () => {
+  it('permits one initial creation across concurrent recoveries despite a non-idempotent provider', async () => {
+    const spy = vi
+      .spyOn(recovery, 'create')
+      .mockRejectedValueOnce(new Error('Before claim'));
     const orderId = await checkout(true);
-    const results = await Promise.all([
+    spy.mockRestore();
+    loseResponse = false;
+    const results = await Promise.allSettled([
       recovery.resume(customerId, orderId),
       recovery.resume(customerId, orderId),
     ]);
-    expect(results[0]).toEqual(results[1]);
+    expect(
+      results.some(
+        (result) =>
+          result.status === 'fulfilled' && result.value.status === 'ready',
+      ),
+    ).toBe(true);
+    for (const result of results)
+      if (result.status === 'rejected') expect(result.reason.status).toBe(409);
     expect(sessions.size).toBe(1);
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
     const payment = await prisma.payment.findFirstOrThrow({
       where: { orderId },
     });
@@ -281,7 +297,7 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
     expect(await prisma.payment.count({ where: { orderId } })).toBe(1);
   });
 
-  it('keeps a provider in-progress response ambiguous until the original call completes', async () => {
+  it('blocks a second creation while the original provider call is in progress', async () => {
     const simulated = globalThis.fetch;
     let release!: () => void;
     let entered!: () => void;
@@ -315,9 +331,9 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
         where: { customerId },
       });
       await expect(recovery.resume(customerId, order.id)).rejects.toMatchObject(
-        { status: 502 },
+        { status: 409 },
       );
-      expect(conflicts).toBe(1);
+      expect(conflicts).toBe(0);
       expect(sessions.size).toBe(1);
     } finally {
       release();
@@ -327,7 +343,7 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
     expect(sessions.size).toBe(1);
   });
 
-  it('recovers when persisting the provider response fails after session creation', async () => {
+  it('requires manual review when persisting the provider response fails', async () => {
     vi.spyOn(prisma.payment, 'updateMany').mockRejectedValueOnce(
       new Error('Simulated response persistence failure'),
     );
@@ -339,13 +355,15 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
       response: { code: 'PAYMENT_CHECKOUT_UNAVAILABLE' },
     });
     const orderId = error.response.orderId as string;
-    loseResponse = false;
-    expect((await recovery.resume(customerId, orderId)).status).toBe('ready');
+    await expect(recovery.resume(customerId, orderId)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect((await recovery.status(customerId, orderId)).canResume).toBe(false);
     expect(sessions.size).toBe(1);
-    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(2);
+    expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
   });
 
-  it('retrieves a known session without another creation, including after the retry window', async () => {
+  it('retrieves a known session without another creation, including after the initial-launch window', async () => {
     const orderId = await checkout();
     await prisma.payMongoCheckoutAttempt.updateMany({
       where: { payment: { orderId } },
@@ -355,8 +373,13 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
     expect(calls.filter((call) => call.method === 'POST')).toHaveLength(1);
   });
 
-  it('refuses ambiguous creation after the recovery window and after credential rotation', async () => {
+  it('refuses a never-started creation after its launch window or credential rotation', async () => {
+    const spy = vi
+      .spyOn(recovery, 'create')
+      .mockRejectedValueOnce(new Error('Before claim'));
     const orderId = await checkout(true);
+    spy.mockRestore();
+    loseResponse = false;
     const expired = await prisma.payMongoCheckoutAttempt.findFirstOrThrow({
       where: { payment: { orderId } },
     });
@@ -373,7 +396,7 @@ describe('PayMongo recovery (isolated database, simulated provider)', () => {
       status: 409,
     });
     expect((await recovery.status(customerId, orderId)).canResume).toBe(false);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(0);
   });
 
   it('keeps legacy payments without a saved attempt in manual review', async () => {

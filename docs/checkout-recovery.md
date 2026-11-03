@@ -29,8 +29,8 @@ The request ledger, order, pending payment, cart clear and revision increment
 commit together. Transactions lock request, cart, then store settings in that
 order. External provider calls occur only after commit and only for the original
 request. Merchant checkout replay/recovery does not contact PayMongo. A separate, explicit
-payment-resume operation can recover a recorded provider attempt within its safe
-window or retrieve a known session. See [payment recovery](payment-recovery.md).
+payment-resume operation can launch a never-started attempt once or retrieve a
+known session. Ambiguous provider creation is never repeated. See [payment recovery](payment-recovery.md).
 
 The browser stores one immutable intent per customer in native IndexedDB before
 sending checkout. A read/write transaction serializes creation across tabs.

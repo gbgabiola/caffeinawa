@@ -4,7 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import type { Payment } from '@prisma/client';
+import type { Payment, PayMongoCheckoutAttempt } from '@prisma/client';
 import {
   OrderStatus,
   PaymentProvider,
@@ -85,7 +85,8 @@ export class PayMongoCheckoutService {
       if (
         !payment.checkoutSessionId &&
         (!payment.checkoutAttempt ||
-          !this.provider.canRecoverCreation(payment.checkoutAttempt))
+          payment.checkoutAttempt.startedAt !== null ||
+          !this.provider.canStartCreation(payment.checkoutAttempt))
       )
         return { canResume: false, message: REVIEW };
       return {
@@ -163,42 +164,53 @@ export class PayMongoCheckoutService {
     return payment;
   }
 
+  private async createOnce(attempt: PayMongoCheckoutAttempt, orderId: string) {
+    if (!this.provider.canStartCreation(attempt))
+      throw new ConflictException(REVIEW);
+    // A durable one-way claim, not a lease. Never release/reset it on a failure:
+    // provider checkout creation did not replay same-key requests in sandbox verification.
+    const startedAt = new Date();
+    const claim = await this.prisma.payMongoCheckoutAttempt.updateMany({
+      where: { paymentId: attempt.paymentId, startedAt: null },
+      data: { startedAt },
+    });
+    if (claim.count !== 1) throw new ConflictException(REVIEW);
+    const session = await this.provider.createCheckoutSession(
+      { ...attempt, startedAt },
+      orderId,
+    );
+    const payment = await this.attachSession(
+      attempt.paymentId,
+      session.sessionId,
+    );
+    return { session, payment };
+  }
+
   async create(orderId: string) {
     const prepared = await this.prepare(orderId);
     if (prepared.payment.checkoutSessionId || !prepared.attempt)
       throw new ConflictException(REVIEW);
-    const session = await this.provider.createCheckoutSession(
-      prepared.attempt,
-      orderId,
-    );
-    const payment = await this.attachSession(
-      prepared.payment.id,
-      session.sessionId,
-    );
+    const result = await this.createOnce(prepared.attempt, orderId);
     const current = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
       include: INCLUDE,
     });
     this.pendingPayment(current);
-    return { payment, checkoutUrl: session.checkoutUrl };
+    return { payment: result.payment, checkoutUrl: result.session.checkoutUrl };
   }
 
   async resume(
     customerId: string,
     orderId: string,
   ): Promise<PaymentResumeResult> {
-    // Establish ownership before the feature gate or external calls.
     await this.ownOrder(customerId, orderId);
     const prepared = await this.prepare(orderId, customerId);
     let sessionId = prepared.payment.checkoutSessionId;
     if (!sessionId) {
       if (!prepared.attempt) throw new ConflictException(REVIEW);
-      const created = await this.provider.createCheckoutSession(
-        prepared.attempt,
-        orderId,
-      );
-      await this.attachSession(prepared.payment.id, created.sessionId);
-      sessionId = created.sessionId;
+      // Only a never-started attempt may make its first provider POST.
+      const result = await this.createOnce(prepared.attempt, orderId);
+      sessionId = result.session.sessionId;
     }
     const cents = prepared.order.total.mul(100);
     if (!cents.isInteger() || !Number.isSafeInteger(cents.toNumber()))
@@ -208,7 +220,6 @@ export class PayMongoCheckoutService {
       orderId,
       cents.toNumber(),
     );
-    // Do not issue a payable URL after concurrent settlement or cancellation.
     const current = await this.ownOrder(customerId, orderId);
     if (
       current.payments.some((payment) => payment.status === PaymentStatus.PAID)
