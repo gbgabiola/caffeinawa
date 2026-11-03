@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AdminController } from './admin.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { AuthThrottlerGuard } from './guards/auth-throttler.guard.js';
 import { AdminGuard } from './guards/admin.guard.js';
 
 @Module({
@@ -24,7 +25,7 @@ import { AdminGuard } from './guards/admin.guard.js';
     ]),
   ],
   controllers: [AuthController, AdminController],
-  providers: [AuthService, AdminGuard],
+  providers: [AuthService, AdminGuard, AuthThrottlerGuard],
   exports: [AuthService, JwtModule, AdminGuard],
 })
 export class AuthModule {}
