@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PaymentProvider, PaymentStatus, Prisma } from '@prisma/client';
 
+import { MAX_CART_ITEM_QUANTITY } from '@caffeinawa/types';
 import type { Cart, CartItem, Order, OrderStatus } from '@caffeinawa/types';
 
 import { isPayMongoEnabled } from '../config/environment.js';
@@ -70,26 +71,26 @@ export class CartService {
     });
   }
 
-  private async findOrCreateCart(customerId: string) {
-    const customer = await this.prisma.customer.findUnique({
+  private async ensureCart(
+    customerId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    const customer = await db.customer.findUnique({
       where: { id: customerId },
     });
-
     if (!customer) {
       throw new NotFoundException(`Customer "${customerId}" not found`);
     }
+    // Empty-update Prisma upserts can race on the first cart. PostgreSQL
+    // ON CONFLICT DO NOTHING also covers a concurrent first GET or addition.
+    await db.cart.createMany({ data: { customerId }, skipDuplicates: true });
+  }
 
-    return this.prisma.cart.upsert({
+  private async findOrCreateCart(customerId: string) {
+    await this.ensureCart(customerId, this.prisma);
+    return this.prisma.cart.findUniqueOrThrow({
       where: { customerId },
-      create: { customerId },
-      update: {},
-      include: {
-        items: {
-          include: {
-            coffee: true,
-          },
-        },
-      },
+      include: { items: { include: { coffee: true } } },
     });
   }
 
@@ -98,43 +99,75 @@ export class CartService {
     return this.toEntity(cart);
   }
 
-  async addItem(customerId: string, dto: AddCartItemDto): Promise<Cart> {
-    const cart = await this.findOrCreateCart(customerId);
-
-    const coffee = await this.prisma.coffee.findUnique({
-      where: { id: dto.coffeeId },
-    });
-
-    if (!coffee) {
-      throw new NotFoundException(`Coffee "${dto.coffeeId}" not found`);
-    }
-
-    if (!coffee.available) {
+  private assertQuantity(quantity: number): void {
+    if (
+      !Number.isSafeInteger(quantity) ||
+      quantity < 1 ||
+      quantity > MAX_CART_ITEM_QUANTITY
+    ) {
       throw new BadRequestException(
-        `Coffee "${dto.coffeeId}" is not currently available`,
+        `Quantity must be a whole number between 1 and ${MAX_CART_ITEM_QUANTITY} per coffee.`,
       );
     }
+  }
 
-    await this.prisma.cartItem.upsert({
-      where: {
-        cartId_coffeeId: {
-          cartId: cart.id,
-          coffeeId: dto.coffeeId,
-        },
-      },
-      create: {
-        cartId: cart.id,
-        coffeeId: dto.coffeeId,
-        quantity: dto.quantity,
-      },
-      update: {
-        quantity: {
-          increment: dto.quantity,
-        },
-      },
+  private async mutateCart(
+    customerId: string,
+    mutate: (tx: Prisma.TransactionClient, cartId: string) => Promise<void>,
+  ): Promise<Cart> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.ensureCart(customerId, tx);
+
+      // All cart writes share checkout's parent-row lock. Read items only
+      // after acquiring it, including when the item has not been created yet.
+      const [cart] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "Cart"
+        WHERE "customerId" = ${customerId}
+        FOR UPDATE
+      `;
+
+      if (!cart) throw new NotFoundException('Cart not found');
+      await mutate(tx, cart.id);
+
+      const updated = await tx.cart.findUniqueOrThrow({
+        where: { customerId },
+        include: { items: { include: { coffee: true } } },
+      });
+      return this.toEntity(updated);
     });
+  }
 
-    return this.findOne(customerId);
+  async addItem(customerId: string, dto: AddCartItemDto): Promise<Cart> {
+    this.assertQuantity(dto.quantity);
+
+    return this.mutateCart(customerId, async (tx, cartId) => {
+      const coffee = await tx.coffee.findUnique({
+        where: { id: dto.coffeeId },
+      });
+      if (!coffee) {
+        throw new NotFoundException(`Coffee "${dto.coffeeId}" not found`);
+      }
+      if (!coffee.available) {
+        throw new BadRequestException(
+          `Coffee "${dto.coffeeId}" is not currently available`,
+        );
+      }
+
+      const item = await tx.cartItem.findFirst({
+        where: { cartId, coffeeId: dto.coffeeId },
+      });
+      this.assertQuantity((item?.quantity ?? 0) + dto.quantity);
+      if (item) {
+        // Invalid legacy data must be corrected explicitly, never on add.
+        this.assertQuantity(item.quantity);
+      }
+
+      await tx.cartItem.upsert({
+        where: { cartId_coffeeId: { cartId, coffeeId: dto.coffeeId } },
+        create: { cartId, coffeeId: dto.coffeeId, quantity: dto.quantity },
+        update: { quantity: { increment: dto.quantity } },
+      });
+    });
   }
 
   async updateItem(
@@ -142,60 +175,38 @@ export class CartService {
     itemId: string,
     dto: UpdateCartItemDto,
   ): Promise<Cart> {
-    const cart = await this.findOrCreateCart(customerId);
+    this.assertQuantity(dto.quantity);
 
-    const item = await this.prisma.cartItem.findFirst({
-      where: {
-        id: itemId,
-        cartId: cart.id,
-      },
+    return this.mutateCart(customerId, async (tx, cartId) => {
+      const item = await tx.cartItem.findFirst({
+        where: { id: itemId, cartId },
+      });
+      if (!item) {
+        throw new NotFoundException(`Cart item "${itemId}" not found`);
+      }
+      await tx.cartItem.update({
+        where: { id: itemId },
+        data: { quantity: dto.quantity },
+      });
     });
-
-    if (!item) {
-      throw new NotFoundException(`Cart item "${itemId}" not found`);
-    }
-
-    await this.prisma.cartItem.update({
-      where: { id: itemId },
-      data: {
-        quantity: dto.quantity,
-      },
-    });
-
-    return this.findOne(customerId);
   }
 
   async removeItem(customerId: string, itemId: string): Promise<Cart> {
-    const cart = await this.findOrCreateCart(customerId);
-
-    const item = await this.prisma.cartItem.findFirst({
-      where: {
-        id: itemId,
-        cartId: cart.id,
-      },
+    return this.mutateCart(customerId, async (tx, cartId) => {
+      const item = await tx.cartItem.findFirst({
+        where: { id: itemId, cartId },
+      });
+      if (!item) {
+        throw new NotFoundException(`Cart item "${itemId}" not found`);
+      }
+      await tx.cartItem.delete({ where: { id: itemId } });
     });
-
-    if (!item) {
-      throw new NotFoundException(`Cart item "${itemId}" not found`);
-    }
-
-    await this.prisma.cartItem.delete({
-      where: { id: itemId },
-    });
-
-    return this.findOne(customerId);
   }
 
   async clear(customerId: string): Promise<Cart> {
-    const cart = await this.findOrCreateCart(customerId);
-
-    await this.prisma.cartItem.deleteMany({
-      where: {
-        cartId: cart.id,
-      },
+    return this.mutateCart(customerId, async (tx, cartId) => {
+      await tx.cartItem.deleteMany({ where: { cartId } });
     });
-
-    return this.findOne(customerId);
   }
 
   async checkout(
@@ -249,6 +260,7 @@ export class CartService {
       }
 
       for (const item of cart.items) {
+        this.assertQuantity(item.quantity);
         if (!item.coffee.available) {
           throw new BadRequestException(
             `Coffee "${item.coffee.name}" is no longer available`,

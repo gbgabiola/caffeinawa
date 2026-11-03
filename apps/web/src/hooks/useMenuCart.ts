@@ -6,6 +6,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { addCartItem, getCart, removeCartItem, updateCartItem } from '@/lib/api/cart';
 import { notifyCartChanged } from '@/lib/cart-events';
 
+import { MAX_CART_ITEM_QUANTITY } from '@caffeinawa/types';
 import type { Cart } from '@caffeinawa/types';
 
 type CartAction = { type: 'add'; coffeeId: string } | { type: 'decrease'; coffeeId: string };
@@ -67,7 +68,7 @@ export function useMenuCart() {
         return removeCartItem(accessToken, customerId, currentItem.id);
       }
 
-      return updateCartItem(accessToken, customerId, currentItem.id, currentItem.quantity - 1);
+      return updateCartItem(accessToken, customerId, currentItem.id, Math.min(MAX_CART_ITEM_QUANTITY, currentItem.quantity - 1));
     },
 
     onSuccess: cart => {

@@ -14,3 +14,4 @@ export type { Order, OrderItem, OrderStatus } from './order.js';
 export type { PaginationMeta, PaginatedResponse } from './pagination.js';
 export type { Payment, PaymentProvider, PaymentStatus } from './payment.js';
 export type { StoreOrderingStatus } from './store.js';
+export { MAX_CART_ITEM_QUANTITY } from './cart-limits.js';

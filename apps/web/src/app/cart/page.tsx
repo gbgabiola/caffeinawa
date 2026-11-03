@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
+import { MAX_CART_ITEM_QUANTITY } from '@caffeinawa/types';
 import type { Cart } from '@caffeinawa/types';
 
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -98,7 +99,8 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const isBusy = busyAction !== null;
   const hasUnavailableItem = items.some(item => !item.coffee.available);
-  const cannotCheckout = isBusy || hasUnavailableItem;
+  const hasInvalidQuantity = items.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > MAX_CART_ITEM_QUANTITY);
+  const cannotCheckout = isBusy || hasUnavailableItem || hasInvalidQuantity;
 
   return (
     <main className="flex-1 bg-cafe-cream text-cafe-espresso">
@@ -192,6 +194,13 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                           {currencyFormatter.format(item.coffee.price)} per drink
                         </p>
 
+                        {item.quantity >= MAX_CART_ITEM_QUANTITY && (
+                          <p role="status" className="mt-3 text-sm text-cafe-muted">
+                            Maximum {MAX_CART_ITEM_QUANTITY} drinks per coffee.
+                            {item.quantity > MAX_CART_ITEM_QUANTITY && ` Use minus to reduce to ${MAX_CART_ITEM_QUANTITY}, or remove this item.`}
+                          </p>
+                        )}
+
                         {!item.coffee.available && (
                           <p className="mt-3 text-sm font-medium text-red-700">Currently unavailable</p>
                         )}
@@ -211,9 +220,9 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                       >
                         <button
                           type="button"
-                          aria-label={`Decrease quantity of ${item.coffee.name}`}
+                          aria-label={item.quantity > MAX_CART_ITEM_QUANTITY ? `Reduce quantity of ${item.coffee.name} to ${MAX_CART_ITEM_QUANTITY}` : `Decrease quantity of ${item.coffee.name}`}
                           disabled={isBusy}
-                          onClick={() => void changeQuantity(item.id, item.quantity - 1)}
+                          onClick={() => void changeQuantity(item.id, Math.min(MAX_CART_ITEM_QUANTITY, item.quantity - 1))}
                           className="flex h-11 w-11 items-center justify-center rounded-full text-xl hover:bg-cafe-soft disabled:opacity-40"
                         >
                           <span aria-hidden="true">−</span>
@@ -226,7 +235,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                         <button
                           type="button"
                           aria-label={`Increase quantity of ${item.coffee.name}`}
-                          disabled={isBusy || !item.coffee.available}
+                          disabled={isBusy || !item.coffee.available || item.quantity >= MAX_CART_ITEM_QUANTITY}
                           onClick={() => void changeQuantity(item.id, item.quantity + 1)}
                           className="flex h-11 w-11 items-center justify-center rounded-full text-xl hover:bg-cafe-soft disabled:opacity-40"
                         >
@@ -265,6 +274,12 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                 <span className="font-medium">Total</span>
                 <span className="text-2xl font-semibold tabular-nums">{currencyFormatter.format(cart.total)}</span>
               </div>
+
+              {hasInvalidQuantity && (
+                <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
+                  Correct quantities to between 1 and {MAX_CART_ITEM_QUANTITY} per coffee before continuing.
+                </p>
+              )}
 
               {hasUnavailableItem && (
                 <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
