@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import type { Order } from '@caffeinawa/types';
 
 import { useAuth } from '@/components/auth/AuthProvider';
+import { clearResolvedCheckout } from '@/lib/checkout-intents';
 import { getOrder } from '@/lib/api/orders';
 
 const CONFIRMATION_TIMEOUT_MS = 30_000;
@@ -104,6 +105,7 @@ function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: Order
 
         if (cancelled) return;
 
+        void clearResolvedCheckout(result.customerId, result.id).catch(() => undefined);
         setOrder(result);
         setError(null);
 

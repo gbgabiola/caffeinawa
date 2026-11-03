@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   query: 'orderId=order-1',
   useAuth: vi.fn(),
   getOrder: vi.fn(),
+  clearResolved: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -22,7 +23,10 @@ vi.mock('@/lib/api/orders', () => ({
   getOrder: mocks.getOrder,
 }));
 
+vi.mock('@/lib/checkout-intents', () => ({ clearResolvedCheckout: mocks.clearResolved }));
+
 beforeEach(() => {
+  mocks.clearResolved.mockReset().mockResolvedValue(undefined);
   mocks.query = 'orderId=order-1';
   mocks.getOrder.mockReset();
 
@@ -38,6 +42,7 @@ describe('Checkout order results', () => {
   it('reports a confirmed order without claiming payment was confirmed', async () => {
     mocks.getOrder.mockResolvedValue({
       id: 'order-1',
+      customerId: 'customer-1',
       status: 'confirmed',
       total: 300,
     });
@@ -53,11 +58,13 @@ describe('Checkout order results', () => {
     expect(mocks.getOrder).toHaveBeenCalledExactlyOnceWith('customer-token', 'order-1');
 
     expect(screen.queryByText('Payment confirmed')).not.toBeInTheDocument();
+    expect(mocks.clearResolved).toHaveBeenCalledWith('customer-1', 'order-1');
   });
 
   it('displays cancellation only when returned by the order API', async () => {
     mocks.getOrder.mockResolvedValue({
       id: 'order-1',
+      customerId: 'customer-1',
       status: 'cancelled',
       total: 300,
     });
@@ -85,6 +92,7 @@ describe('Checkout order results', () => {
     ).toBeInTheDocument();
 
     expect(mocks.getOrder).not.toHaveBeenCalled();
+    expect(mocks.clearResolved).not.toHaveBeenCalled();
   });
 
   it('does not request private order details when signed out', () => {
@@ -104,6 +112,7 @@ describe('Checkout order results', () => {
     ).toBeInTheDocument();
 
     expect(mocks.getOrder).not.toHaveBeenCalled();
+    expect(mocks.clearResolved).not.toHaveBeenCalled();
   });
 
   it('shows order lookup errors', async () => {
@@ -112,6 +121,7 @@ describe('Checkout order results', () => {
     render(<CheckoutSuccessPage />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load order.');
+    expect(mocks.clearResolved).not.toHaveBeenCalled();
 
     expect(
       screen.getByRole('button', {
@@ -138,6 +148,7 @@ describe('Checkout order results', () => {
     ).not.toBeInTheDocument();
 
     expect(mocks.getOrder).not.toHaveBeenCalled();
+    expect(mocks.clearResolved).not.toHaveBeenCalled();
   });
 
   it('explains checkout failure while displaying the existing pending order', async () => {
@@ -145,6 +156,7 @@ describe('Checkout order results', () => {
 
     mocks.getOrder.mockResolvedValue({
       id: 'order-1',
+      customerId: 'customer-1',
       status: 'pending',
       total: 300,
     });

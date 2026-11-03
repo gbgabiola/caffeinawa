@@ -274,7 +274,13 @@ describe('Cash checkout and payment flow (database e2e)', () => {
       await request(app.getHttpServer())
         .post(`/api/customers/${customerId}/cart/checkout`)
         .set('Authorization', `Bearer ${customerToken}`)
-        .send({ paymentProvider })
+        .send({
+          paymentProvider,
+          idempotencyKey: randomUUID(),
+          cartRevision:
+            (await prisma.cart.findUnique({ where: { customerId } }))
+              ?.revision ?? 0,
+        })
         .expect(409)
         .expect(({ body }) => {
           expect(body.code).toBe('ORDERING_CLOSED');
@@ -316,6 +322,10 @@ describe('Cash checkout and payment flow (database e2e)', () => {
       .set('Authorization', `Bearer ${customerToken}`)
       .send({
         paymentProvider: 'cash',
+        idempotencyKey: randomUUID(),
+        cartRevision: (
+          await prisma.cart.findUniqueOrThrow({ where: { customerId } })
+        ).revision,
       })
       .expect(201);
 

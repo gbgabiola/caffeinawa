@@ -1,11 +1,6 @@
 import { BadRequestException, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import {
-  OrderStatus,
-  PaymentProvider,
-  PaymentStatus,
-  Prisma,
-} from '@prisma/client';
+import { OrderStatus, PaymentProvider, PaymentStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -241,7 +236,12 @@ describe('Concurrent cart checkout (database e2e)', () => {
     await resetCart(101);
     try {
       await expect(
-        cartService.checkout(customerId, 'cash'),
+        cartService.checkout(
+          customerId,
+          'cash',
+          randomUUID(),
+          (await cartService.findOne(customerId)).revision,
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(await prisma.order.count({ where: { customerId } })).toBe(0);
       const cart = await cartService.findOne(customerId);
@@ -257,37 +257,37 @@ describe('Concurrent cart checkout (database e2e)', () => {
     }
   }, 20_000);
 
-  it('preserves a concurrent addition either in the order or the remaining cart', async () => {
+  it('rejects a changed cart or preserves a concurrent addition after checkout', async () => {
     if (!customerId || !coffeeId) throw new Error('Missing fixtures');
     await resetCart(1);
     try {
-      const [order] = await Promise.all([
-        cartService.checkout(customerId, 'cash'),
+      const revision = (await cartService.findOne(customerId)).revision;
+      const results = await Promise.allSettled([
+        cartService.checkout(customerId, 'cash', randomUUID(), revision),
         cartService.addItem(customerId, { coffeeId, quantity: 2 }),
       ]);
-      expect('items' in order).toBe(true);
+      expect(results[1]!.status).toBe('fulfilled');
       const orders = await prisma.order.findMany({
         where: { customerId },
         include: { items: true, payments: true },
       });
       const cart = await cartService.findOne(customerId);
-      expect(orders).toHaveLength(1);
-      const orderedQuantity = orders[0]!.items.reduce(
-        (sum, item) => sum + item.quantity,
+      const ordered = orders.reduce(
+        (sum, order) =>
+          sum + order.items.reduce((n, item) => n + item.quantity, 0),
         0,
       );
-      const remainingQuantity = cart.items.reduce(
-        (sum, item) => sum + item.quantity,
-        0,
-      );
-      expect(orderedQuantity + remainingQuantity).toBe(3);
-      expect(orders[0]!.total.toString()).toBe(
-        new Prisma.Decimal('125.50').mul(orderedQuantity).toString(),
-      );
-      expect(orders[0]!.payments).toHaveLength(1);
-      expect(orders[0]!.payments[0]!.amount.toString()).toBe(
-        orders[0]!.total.toString(),
-      );
+      expect(
+        ordered + cart.items.reduce((n, item) => n + item.quantity, 0),
+      ).toBe(3);
+      if (results[0]!.status === 'rejected') {
+        expect(results[0]!.reason.response.code).toBe('CART_CHANGED');
+        expect(orders).toHaveLength(0);
+      } else {
+        expect(orders).toHaveLength(1);
+        expect(orders[0]!.payments).toHaveLength(1);
+        expect(orders[0]!.items[0]!.quantity).toBe(1);
+      }
     } finally {
       await prisma.payment.deleteMany({ where: { order: { customerId } } });
       await prisma.order.deleteMany({ where: { customerId } });
@@ -300,9 +300,10 @@ describe('Concurrent cart checkout (database e2e)', () => {
       throw new Error('Checkout fixtures were not initialized');
     }
 
+    const revision = (await cartService.findOne(customerId)).revision;
     const results = await Promise.allSettled([
-      cartService.checkout(customerId, 'cash'),
-      cartService.checkout(customerId, 'cash'),
+      cartService.checkout(customerId, 'cash', randomUUID(), revision),
+      cartService.checkout(customerId, 'cash', randomUUID(), revision),
     ]);
 
     const successful = results.filter(

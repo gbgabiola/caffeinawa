@@ -7,7 +7,11 @@ import {
   Patch,
   Post,
   UseGuards,
+  HttpCode,
+  Res,
 } from '@nestjs/common';
+
+import type { Response } from 'express';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CustomerOwnerGuard } from '../auth/guards/customer-owner.guard.js';
@@ -57,7 +61,32 @@ export class CartController {
   }
 
   @Post('checkout')
-  checkout(@Param('customerId') customerId: string, @Body() dto: CheckoutDto) {
-    return this.cartService.checkout(customerId, dto.paymentProvider ?? 'cash');
+  async checkout(
+    @Param('customerId') customerId: string,
+    @Body() dto: CheckoutDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.cartService.checkout(
+      customerId,
+      dto.paymentProvider ?? 'cash',
+      dto.idempotencyKey,
+      dto.cartRevision,
+    );
+    if ('checkoutReplayed' in result) response.status(200);
+    return result;
+  }
+
+  @Post('checkout/recover')
+  @HttpCode(200)
+  recoverCheckout(
+    @Param('customerId') customerId: string,
+    @Body() dto: CheckoutDto,
+  ) {
+    return this.cartService.recoverCheckout(
+      customerId,
+      dto.paymentProvider ?? 'cash',
+      dto.idempotencyKey,
+      dto.cartRevision,
+    );
   }
 }
