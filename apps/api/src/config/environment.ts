@@ -107,6 +107,22 @@ export function validateEnvironment(
     );
   }
 
+  if (
+    isPayMongoEnabled(env) &&
+    (env.NODE_ENV === 'production' || env.PAYMONGO_MODE === 'live') &&
+    env.PAYMONGO_API_URL
+  ) {
+    try {
+      if (new URL(env.PAYMONGO_API_URL).protocol !== 'https:') {
+        errors.push(
+          'PAYMONGO_API_URL must use HTTPS in production or live mode',
+        );
+      }
+    } catch {
+      // The general URL validator above already reports malformed values.
+    }
+  }
+
   if (env.PORT !== undefined) {
     const port = Number(env.PORT);
 
