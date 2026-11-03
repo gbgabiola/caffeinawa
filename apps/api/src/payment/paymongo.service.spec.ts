@@ -38,7 +38,7 @@ describe('PayMongo checkout transport', () => {
     fetchMock.mockReset();
     vi.stubEnv('PAYMONGO_SECRET_KEY', 'synthetic-provider-key');
     vi.stubEnv('PAYMONGO_API_URL', 'https://api.paymongo.com/');
-    vi.stubEnv('WEB_URL', 'https://caffeinawa.pages.dev');
+    vi.stubEnv('WEB_URL', 'https://caffeinawa.pages.dev/');
     vi.stubEnv('NODE_ENV', 'test');
     vi.stubEnv('PAYMONGO_MODE', 'test');
     vi.stubGlobal('fetch', fetchMock);

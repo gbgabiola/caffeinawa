@@ -71,7 +71,9 @@ export class PayMongoService {
 
   private readonly secretKey = process.env.PAYMONGO_SECRET_KEY;
 
-  private readonly webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
+  private readonly webUrl = new URL(
+    process.env.WEB_URL ?? 'http://localhost:3000',
+  ).origin;
 
   async createCheckoutSession(input: CreateCheckoutSessionInput): Promise<{
     sessionId: string;
