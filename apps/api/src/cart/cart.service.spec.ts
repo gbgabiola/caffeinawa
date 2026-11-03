@@ -125,6 +125,7 @@ function createHarness() {
 
   const paymentService = {
     createCashPayment: vi.fn(),
+    preparePayMongoCheckout: vi.fn(),
     createPayMongoPayment: vi.fn(),
   };
 

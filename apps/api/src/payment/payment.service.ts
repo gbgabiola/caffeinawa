@@ -16,7 +16,7 @@ import {
 import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentEntity } from './entities/payment.entity.js';
-import { PayMongoService } from './paymongo.service.js';
+import { PayMongoCheckoutService } from './paymongo-checkout.service.js';
 
 import type { AdminPayment } from '@caffeinawa/types';
 import type { AdminPaymentQueryDto } from './dto/admin-payment-query.dto.js';
@@ -41,7 +41,7 @@ const paymentLogger = new Logger('PaymentService');
 export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly payMongoService: PayMongoService,
+    private readonly payMongoCheckoutService: PayMongoCheckoutService,
   ) {}
 
   async findAll(query: AdminPaymentQueryDto) {
@@ -381,64 +381,21 @@ export class PaymentService {
     });
   }
 
+  async preparePayMongoCheckout(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    await this.payMongoCheckoutService.prepareNew(tx, orderId);
+  }
+
   async createPayMongoPayment(orderId: string): Promise<{
     payment: PaymentEntity;
     checkoutUrl: string;
   }> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { customer: true, items: { include: { coffee: true } } },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`Order "${orderId}" not found`);
-    }
-
-    const existingPayment = await this.prisma.payment.findFirst({
-      where: {
-        orderId,
-        provider: PaymentProvider.PAYMONGO,
-        status: PaymentStatus.PENDING,
-      },
-    });
-
-    if (existingPayment?.checkoutSessionId) {
-      throw new BadRequestException(
-        'This order already has a pending PayMongo payment',
-      );
-    }
-
-    const session = await this.payMongoService.createCheckoutSession({
-      orderId: order.id,
-      amount: order.total.toNumber(),
-      customerName: order.customer.name,
-      customerEmail: order.customer.email,
-      items: order.items.map((item) => ({
-        name: item.coffee.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice.toNumber(),
-      })),
-    });
-
-    const payment = existingPayment
-      ? await this.prisma.payment.update({
-          where: { id: existingPayment.id },
-          data: { checkoutSessionId: session.sessionId },
-        })
-      : await this.prisma.payment.create({
-          data: {
-            orderId: order.id,
-            provider: PaymentProvider.PAYMONGO,
-            checkoutSessionId: session.sessionId,
-            amount: order.total,
-            currency: 'PHP',
-            status: PaymentStatus.PENDING,
-          },
-        });
-
+    const result = await this.payMongoCheckoutService.create(orderId);
     return {
-      payment: this.toEntity(payment),
-      checkoutUrl: session.checkoutUrl,
+      payment: this.toEntity(result.payment),
+      checkoutUrl: result.checkoutUrl,
     };
   }
 

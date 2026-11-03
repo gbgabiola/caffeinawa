@@ -93,18 +93,19 @@ model CartItem {
 }
 
 model Payment {
-  id                String          @id @default(uuid())
+  checkoutAttempt   PayMongoCheckoutAttempt?
+  id                String                   @id @default(uuid())
   orderId           String
-  provider          PaymentProvider @default(CASH)
-  checkoutSessionId String?         @unique
+  provider          PaymentProvider          @default(CASH)
+  checkoutSessionId String?                  @unique
   paymentIntentId   String?
-  providerEventId   String?         @unique
+  providerEventId   String?                  @unique
   amount            Decimal
-  currency          String          @default("PHP")
-  status            PaymentStatus   @default(PENDING)
+  currency          String                   @default("PHP")
+  status            PaymentStatus            @default(PENDING)
   paidAt            DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
@@ -205,4 +206,13 @@ model CheckoutRequest {
   order           Order?                @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@id([customerId, idempotencyKey])
+}
+
+// Immutable creation request. Never recreate or expire independently of payment.
+model PayMongoCheckoutAttempt {
+  paymentId   String   @id
+  requestBody String
+  scopeHash   String
+  createdAt   DateTime @default(now())
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 }

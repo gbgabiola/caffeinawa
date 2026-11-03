@@ -7,7 +7,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
-import { PayMongoService } from './paymongo.service.js';
+import { PayMongoCheckoutService } from './paymongo-checkout.service.js';
 import { PaymentService } from './payment.service.js';
 
 const fixedDate = new Date('2026-10-01T10:00:00.000Z');
@@ -63,7 +63,7 @@ function createHarness() {
 
   const service = new PaymentService(
     prisma as unknown as PrismaService,
-    {} as PayMongoService,
+    {} as PayMongoCheckoutService,
   );
 
   return {
