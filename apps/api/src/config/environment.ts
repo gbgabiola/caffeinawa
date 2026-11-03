@@ -92,6 +92,21 @@ export function validateEnvironment(
     }
   }
 
+  if (
+    env.AUTH_CLIENT_IP_SOURCE !== undefined &&
+    !['socket', 'render-cloudflare'].includes(env.AUTH_CLIENT_IP_SOURCE)
+  ) {
+    errors.push('AUTH_CLIENT_IP_SOURCE must be socket or render-cloudflare');
+  }
+  if (
+    env.AUTH_CLIENT_IP_SOURCE === 'render-cloudflare' &&
+    (env.RENDER !== 'true' || env.RENDER_SERVICE_TYPE !== 'web')
+  ) {
+    errors.push(
+      'AUTH_CLIENT_IP_SOURCE=render-cloudflare requires a Render web service',
+    );
+  }
+
   if (env.PORT !== undefined) {
     const port = Number(env.PORT);
 

@@ -22,6 +22,9 @@ services:
       - key: NODE_VERSION
         value: '24'
 
+      - key: AUTH_CLIENT_IP_SOURCE
+        value: render-cloudflare
+
       - key: NODE_ENV
         value: production
 

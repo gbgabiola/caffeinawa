@@ -75,6 +75,39 @@ describe('validateEnvironment', () => {
     ).not.toThrow();
   });
 
+  it('accepts explicit socket mode', () => {
+    expect(() =>
+      validateEnvironment(makeEnvironment({ AUTH_CLIENT_IP_SOURCE: 'socket' })),
+    ).not.toThrow();
+  });
+
+  it('accepts edge mode on a Render web service', () => {
+    expect(() =>
+      validateEnvironment(
+        makeEnvironment({
+          AUTH_CLIENT_IP_SOURCE: 'render-cloudflare',
+          RENDER: 'true',
+          RENDER_SERVICE_TYPE: 'web',
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it.each([
+    { AUTH_CLIENT_IP_SOURCE: 'true' },
+    { AUTH_CLIENT_IP_SOURCE: '' },
+    { AUTH_CLIENT_IP_SOURCE: 'render-cloudflare' },
+    {
+      AUTH_CLIENT_IP_SOURCE: 'render-cloudflare',
+      RENDER: 'true',
+      RENDER_SERVICE_TYPE: 'pserv',
+    },
+  ])('rejects unsafe auth client-IP configuration: %o', (overrides) => {
+    expect(() => validateEnvironment(makeEnvironment(overrides))).toThrow(
+      'AUTH_CLIENT_IP_SOURCE',
+    );
+  });
+
   it('does not expose invalid values in validation errors', () => {
     const sensitiveValue = 'private-database-connection-value';
 

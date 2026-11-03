@@ -112,3 +112,22 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Authentication client IP on Render
+
+Login and registration use an in-memory limiter on the existing single API instance.
+`AUTH_CLIENT_IP_SOURCE=socket` is the default for local/direct connections and ignores all forwarding headers.
+For this public Render web service, `render.yaml` declares `AUTH_CLIENT_IP_SOURCE=render-cloudflare`.
+Apply the same non-secret key to the existing Render service before deploying this code; future Blueprint syncs retain the declared value.
+Startup requires Render's documented `RENDER=true` and `RENDER_SERVICE_TYPE=web` in edge mode.
+
+Edge mode uses only a single valid `CF-Connecting-IP`, then delegates IP normalization and IPv6 subnet grouping to Nest's throttler.
+A missing or malformed edge header returns a generic 503 before authentication reaches the service.
+Express `trust proxy` remains disabled; `X-Forwarded-For`, `True-Client-IP`, and other caller-provided forwarding headers do not select auth buckets.
+The configured limits remain 10 login requests and 5 registrations per minute, independently per client.
+Counters reset on restart; multiple API instances would require a shared limiter store.
+
+This setting relies on the public Render edge overwriting `CF-Connecting-IP`.
+Reassess it before exposing the API directly, through a private network, or through a different ingress.
+See [Render's client-IP guidance](https://render.com/articles/host-pocketbase-on-render#making-pocketbase-see-the-real-client-ip)
+and [Cloudflare's header reference](https://developers.cloudflare.com/fundamentals/reference/http-headers/#cf-connecting-ip).
