@@ -108,6 +108,29 @@ describe('validateEnvironment', () => {
     );
   });
 
+  it.each([
+    ['production', 'test'],
+    ['test', 'live'],
+  ])(
+    'requires HTTPS for enabled %s / %s PayMongo requests',
+    (nodeEnv, mode) => {
+      const env = makeEnvironment({
+        NODE_ENV: nodeEnv,
+        PAYMONGO_ENABLED: 'true',
+        PAYMONGO_MODE: mode,
+        PAYMONGO_SECRET_KEY: 'synthetic-provider-key',
+        PAYMONGO_WEBHOOK_SECRET: 'synthetic-webhook-key',
+        PAYMONGO_API_URL: 'http://localhost:3009',
+      });
+      expect(() => validateEnvironment(env)).toThrow(
+        'PAYMONGO_API_URL must use HTTPS in production',
+      );
+      env.NODE_ENV = 'test';
+      env.PAYMONGO_MODE = 'test';
+      expect(() => validateEnvironment(env)).not.toThrow();
+    },
+  );
+
   it('does not expose invalid values in validation errors', () => {
     const sensitiveValue = 'private-database-connection-value';
 

@@ -131,3 +131,16 @@ This setting relies on the public Render edge overwriting `CF-Connecting-IP`.
 Reassess it before exposing the API directly, through a private network, or through a different ingress.
 See [Render's client-IP guidance](https://render.com/articles/host-pocketbase-on-render#making-pocketbase-see-the-real-client-ip)
 and [Cloudflare's header reference](https://developers.cloudflare.com/fundamentals/reference/http-headers/#cf-connecting-ip).
+
+## PayMongo checkout transport
+
+Checkout creation makes one provider request with a 10-second deadline covering headers and the response body.
+It does not follow HTTP redirects or automatically retry failed/ambiguous POST requests.
+The service validates the session resource type, nonblank ID, HTTPS checkout URL without embedded credentials,
+and the order reference when returned. Provider bodies, transport exceptions, customer data, and credentials are not logged or returned.
+Safe logs contain only the failure category or HTTP status.
+Enabled production or live-mode configuration requires an HTTPS provider API origin.
+
+A timeout can occur after the provider creates a session. The committed order reference remains the customer's recovery path;
+this transport hardening does not implement safe payment resume or assert provider idempotency guarantees.
+Keep PayMongo disabled until its account setup and payment recovery flow have been verified.
