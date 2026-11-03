@@ -17,22 +17,23 @@ model Coffee {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  orderItems  OrderItem[]
-  cartItems   CartItem[]
+  orderItems OrderItem[]
+  cartItems  CartItem[]
 
   @@index([category, available])
   @@index([createdAt])
 }
 
 model Customer {
-  id      String        @id @default(uuid())
-  name    String
-  email   String        @unique
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
   passwordHash String?
-  role    CustomerRole  @default(CUSTOMER)
+  role         CustomerRole @default(CUSTOMER)
 
-  cart    Cart?
-  orders  Order[]
+  checkoutRequests CheckoutRequest[]
+  cart             Cart?
+  orders           Order[]
 
   @@index([name])
 }
@@ -44,9 +45,10 @@ model Order {
   total      Decimal
   createdAt  DateTime    @default(now())
 
-  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  items      OrderItem[]
-  payments   Payment[]
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items           OrderItem[]
+  payments        Payment[]
+  checkoutRequest CheckoutRequest?
 
   @@index([customerId, createdAt])
   @@index([status, createdAt])
@@ -54,27 +56,28 @@ model Order {
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   quantity  Int
   unitPrice Decimal
   orderId   String
   coffeeId  String
 
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  coffee    Coffee   @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  coffee Coffee @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
   @@index([coffeeId])
 }
 
 model Cart {
-  id         String     @id @default(uuid())
-  customerId String     @unique
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  revision   Int      @default(0)
+  id         String   @id @default(uuid())
+  customerId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  items      CartItem[]
+  customer Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    CartItem[]
 }
 
 model CartItem {
@@ -83,8 +86,8 @@ model CartItem {
   coffeeId String
   quantity Int
 
-  cart     Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  coffee   Coffee @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  coffee Coffee @relation(fields: [coffeeId], references: [id], onDelete: Restrict)
 
   @@unique([cartId, coffeeId])
 }
@@ -103,7 +106,8 @@ model Payment {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  order             Order           @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
   @@index([orderId, createdAt])
   @@index([status, createdAt])
   @@index([provider, status, createdAt])
@@ -180,4 +184,25 @@ model StoreSettings {
   id              String   @id @default("main")
   acceptingOrders Boolean  @default(false)
   updatedAt       DateTime @default(now()) @updatedAt
+}
+
+// Retained with the order/customer: do not expire keys while orders are retained.
+enum CheckoutRequestStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model CheckoutRequest {
+  customerId      String
+  idempotencyKey  String                @db.Uuid
+  paymentProvider PaymentProvider
+  cartRevision    Int
+  status          CheckoutRequestStatus @default(PENDING)
+  orderId         String?               @unique
+  createdAt       DateTime              @default(now())
+  customer        Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order           Order?                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, idempotencyKey])
 }

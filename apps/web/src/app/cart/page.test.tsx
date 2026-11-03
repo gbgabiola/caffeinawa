@@ -15,7 +15,7 @@ vi.mock('@/lib/api/cart', () => mocks);
 vi.mock('@/lib/cart-events', () => ({ notifyCartChanged: vi.fn() }));
 
 function cart(quantity: number): Cart {
-  return { id: 'cart-1', customerId: 'customer-1', total: quantity * 100, items: [{
+  return { id: 'cart-1', revision: 0, customerId: 'customer-1', total: quantity * 100, items: [{
     id: 'item-1', coffeeId: 'coffee-1', quantity, subtotal: quantity * 100,
     coffee: { id: 'coffee-1', name: 'Latte', price: 100, available: true },
   }] };

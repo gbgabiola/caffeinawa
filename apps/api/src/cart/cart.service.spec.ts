@@ -16,6 +16,7 @@ import { PaymentService } from '../payment/payment.service.js';
 import { StoreService } from '../store/store.service.js';
 import { CartService } from './cart.service.js';
 
+const key = '00000000-0000-4000-8000-000000000001';
 const customerId = 'customer-1';
 const cartId = 'cart-1';
 const coffeeId = 'coffee-1';
@@ -41,6 +42,7 @@ function makeCoffee(overrides: Record<string, unknown> = {}) {
 function makeCart(items: Array<Record<string, unknown>> = []) {
   return {
     id: cartId,
+    revision: 0,
     customerId,
     createdAt: fixedDate,
     updatedAt: fixedDate,
@@ -83,13 +85,19 @@ function createHarness() {
     $queryRaw: vi.fn().mockResolvedValue([{ id: cartId }]),
 
     customer: { findUnique: vi.fn() },
-    cart: { findUnique: vi.fn() },
+    cart: { findUnique: vi.fn(), update: vi.fn() },
+    checkoutRequest: {
+      createMany: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+    },
     order: { create: vi.fn() },
     payment: { create: vi.fn() },
     cartItem: { deleteMany: vi.fn() },
   };
 
   const prisma = {
+    checkoutRequest: { findUnique: vi.fn().mockResolvedValue(null) },
     customer: { findUnique: vi.fn() },
     cart: { createMany: vi.fn(), findUniqueOrThrow: vi.fn() },
     coffee: { findUnique: vi.fn() },
@@ -153,6 +161,22 @@ describe('CartService', () => {
     harness.tx.cart.findUnique.mockResolvedValue(makeCart([makeCartItem()]));
 
     harness.tx.order.create.mockResolvedValue(makeOrder());
+    harness.tx.checkoutRequest.findUniqueOrThrow.mockResolvedValue({
+      paymentProvider: 'CASH',
+      cartRevision: 0,
+      status: 'PENDING',
+      order: null,
+    });
+    harness.tx.checkoutRequest.createMany.mockImplementation(
+      async ({ data }) => {
+        harness.tx.checkoutRequest.findUniqueOrThrow.mockResolvedValue({
+          ...data,
+          status: 'PENDING',
+          order: null,
+        });
+        return { count: 1 };
+      },
+    );
   });
 
   afterEach(() => {
@@ -402,6 +426,37 @@ describe('CartService', () => {
   });
 
   describe('checkout', () => {
+    it.each([
+      ['invalid', 0],
+      [key, -1],
+      [key, 1.5],
+      [key, 2147483648],
+    ])(
+      'rejects invalid direct-service input %s / %s before any database work',
+      async (requestKey, revision) => {
+        await expect(
+          harness.service.checkout(
+            customerId,
+            'cash',
+            requestKey as string,
+            revision as number,
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        await expect(
+          harness.service.recoverCheckout(
+            customerId,
+            'cash',
+            requestKey as string,
+            revision as number,
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(harness.prisma.$transaction).not.toHaveBeenCalled();
+        expect(
+          harness.prisma.checkoutRequest.findUnique,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
     it.each([0, -1, 1.5, 100])(
       'rejects legacy invalid quantity %s before any order or payment',
       async (quantity) => {
@@ -409,7 +464,7 @@ describe('CartService', () => {
           makeCart([makeCartItem({ quantity })]),
         );
         await expect(
-          harness.service.checkout(customerId, 'cash'),
+          harness.service.checkout(customerId, 'cash', key, 0),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(harness.tx.order.create).not.toHaveBeenCalled();
         expect(harness.paymentService.createCashPayment).not.toHaveBeenCalled();
@@ -420,9 +475,9 @@ describe('CartService', () => {
     it('rejects checkout for a missing customer', async () => {
       harness.tx.customer.findUnique.mockResolvedValue(null);
 
-      await expect(harness.service.checkout(customerId)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        harness.service.checkout(customerId, 'cash', key, 0),
+      ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(harness.tx.order.create).not.toHaveBeenCalled();
       expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
@@ -431,9 +486,9 @@ describe('CartService', () => {
     it('rejects an empty cart', async () => {
       harness.tx.cart.findUnique.mockResolvedValue(makeCart());
 
-      await expect(harness.service.checkout(customerId)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        harness.service.checkout(customerId, 'cash', key, 0),
+      ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(harness.tx.order.create).not.toHaveBeenCalled();
       expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
@@ -442,9 +497,9 @@ describe('CartService', () => {
     it('rejects checkout when the cart does not exist', async () => {
       harness.tx.cart.findUnique.mockResolvedValue(null);
 
-      await expect(harness.service.checkout(customerId)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        harness.service.checkout(customerId, 'cash', key, 0),
+      ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(harness.tx.order.create).not.toHaveBeenCalled();
     });
@@ -458,16 +513,16 @@ describe('CartService', () => {
         ]),
       );
 
-      await expect(harness.service.checkout(customerId)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        harness.service.checkout(customerId, 'cash', key, 0),
+      ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(harness.tx.order.create).not.toHaveBeenCalled();
       expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
     });
 
     it('calculates checkout total from current server-side prices', async () => {
-      const result = await harness.service.checkout(customerId);
+      const result = await harness.service.checkout(customerId, 'cash', key, 0);
 
       expect(harness.tx.order.create).toHaveBeenCalledOnce();
 
@@ -499,7 +554,7 @@ describe('CartService', () => {
     });
 
     it('creates a pending cash payment during checkout', async () => {
-      await harness.service.checkout(customerId, 'cash');
+      await harness.service.checkout(customerId, 'cash', key, 0);
 
       expect(harness.paymentService.createCashPayment).toHaveBeenCalledOnce();
 
@@ -533,7 +588,12 @@ describe('CartService', () => {
         checkoutUrl: 'https://checkout.example.com/session',
       });
 
-      const result = await harness.service.checkout(customerId, 'paymongo');
+      const result = await harness.service.checkout(
+        customerId,
+        'paymongo',
+        key,
+        0,
+      );
 
       expect(harness.tx.payment.create).toHaveBeenCalledWith({
         data: {
@@ -564,9 +624,9 @@ describe('CartService', () => {
         new Error('Database insert failed'),
       );
 
-      await expect(harness.service.checkout(customerId)).rejects.toThrow(
-        'Database insert failed',
-      );
+      await expect(
+        harness.service.checkout(customerId, 'cash', key, 0),
+      ).rejects.toThrow('Database insert failed');
 
       expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
       expect(harness.paymentService.createCashPayment).not.toHaveBeenCalled();
@@ -578,7 +638,7 @@ describe('CartService', () => {
       );
 
       await expect(
-        harness.service.checkout(customerId, 'cash'),
+        harness.service.checkout(customerId, 'cash', key, 0),
       ).rejects.toThrow('Payment insert failed');
 
       expect(harness.tx.cartItem.deleteMany).not.toHaveBeenCalled();
@@ -590,7 +650,7 @@ describe('CartService', () => {
       );
 
       await expect(
-        harness.service.checkout(customerId, 'paymongo'),
+        harness.service.checkout(customerId, 'paymongo', key, 0),
       ).rejects.toThrow('Pending payment insert failed');
 
       expect(
@@ -633,7 +693,7 @@ describe('CartService', () => {
         },
       );
 
-      await harness.service.checkout(customerId, 'paymongo');
+      await harness.service.checkout(customerId, 'paymongo', key, 0);
 
       expect(transactionFinished).toBe(true);
     });
@@ -646,7 +706,7 @@ describe('CartService', () => {
         );
 
         await expect(
-          harness.service.checkout(customerId, provider),
+          harness.service.checkout(customerId, provider, key, 0),
         ).rejects.toBeInstanceOf(ConflictException);
 
         expect(harness.storeService.assertAcceptingOrders).toHaveBeenCalledWith(
@@ -673,11 +733,11 @@ describe('CartService', () => {
         return [{ id: cartId }];
       });
 
-      await harness.service.checkout(customerId, 'cash');
+      await harness.service.checkout(customerId, 'cash', key, 0);
 
-      expect(harness.tx.$queryRaw).toHaveBeenCalledOnce();
+      expect(harness.tx.$queryRaw).toHaveBeenCalledTimes(2);
 
-      const [strings, lockedCustomerId] = harness.tx.$queryRaw.mock.calls[0];
+      const [strings, lockedCustomerId] = harness.tx.$queryRaw.mock.calls[1];
 
       expect(strings.join('')).toContain('FROM "Cart"');
       expect(strings.join('')).toContain('FOR UPDATE');
@@ -692,7 +752,7 @@ describe('CartService', () => {
       );
 
       const error = await harness.service
-        .checkout(customerId, 'paymongo')
+        .checkout(customerId, 'paymongo', key, 0)
         .catch((cause: unknown) => cause);
 
       expect(error).toMatchObject({
@@ -721,7 +781,7 @@ describe('CartService', () => {
       vi.stubEnv('PAYMONGO_ENABLED', 'false');
 
       await expect(
-        harness.service.checkout(customerId, 'paymongo'),
+        harness.service.checkout(customerId, 'paymongo', key, 0),
       ).rejects.toThrow(
         'PayMongo checkout is currently unavailable. Please choose cash.',
       );
@@ -737,7 +797,7 @@ describe('CartService', () => {
     it('allows cash checkout when PayMongo is disabled', async () => {
       vi.stubEnv('PAYMONGO_ENABLED', 'false');
 
-      await harness.service.checkout(customerId, 'cash');
+      await harness.service.checkout(customerId, 'cash', key, 0);
 
       expect(harness.tx.order.create).toHaveBeenCalledOnce();
       expect(harness.paymentService.createCashPayment).toHaveBeenCalledOnce();

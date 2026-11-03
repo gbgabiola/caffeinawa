@@ -22,7 +22,7 @@ vi.mock('@/components/auth/AuthProvider', () => ({
 
 function makeCart(total: number): Cart {
   return {
-    id: 'cart-1',
+    id: 'cart-1', revision: 0,
     customerId: 'customer-1',
     items: [],
     total,

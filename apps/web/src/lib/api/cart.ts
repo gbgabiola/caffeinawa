@@ -1,4 +1,11 @@
-import type { Cart, Order, Payment, PaymentProvider } from '@caffeinawa/types';
+import type {
+  Cart,
+  Order,
+  Payment,
+  CheckoutRequestInput,
+  CheckoutReplayResult,
+  CheckoutRecoveryResult,
+} from '@caffeinawa/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
@@ -8,7 +15,7 @@ interface PayMongoCheckoutResponse {
   checkoutUrl: string;
 }
 
-export type CartCheckoutResponse = Order | PayMongoCheckoutResponse;
+export type CartCheckoutResponse = Order | PayMongoCheckoutResponse | CheckoutReplayResult;
 export class PaymentCheckoutUnavailableError extends Error {
   constructor(readonly orderId: string) {
     super('Your order was created, but payment checkout could not be opened.');
@@ -102,7 +109,12 @@ export function getCart(accessToken: string, customerId: string): Promise<Cart> 
   return request<Cart>(accessToken, `/customers/${encodeURIComponent(customerId)}/cart`);
 }
 
-export function addCartItem(accessToken: string, customerId: string, coffeeId: string, quantity = 1): Promise<Cart> {
+export function addCartItem(
+  accessToken: string,
+  customerId: string,
+  coffeeId: string,
+  quantity = 1,
+): Promise<Cart> {
   return request<Cart>(accessToken, `/customers/${encodeURIComponent(customerId)}/cart/items`, {
     method: 'POST',
     body: JSON.stringify({
@@ -149,21 +161,46 @@ export function clearCart(accessToken: string, customerId: string): Promise<Cart
 export function checkoutCart(
   accessToken: string,
   customerId: string,
-  paymentProvider: PaymentProvider,
+  input: CheckoutRequestInput,
 ): Promise<CartCheckoutResponse> {
-  return request<CartCheckoutResponse>(accessToken, `/customers/${encodeURIComponent(customerId)}/cart/checkout`, {
-    method: 'POST',
-    body: JSON.stringify({
-      paymentProvider,
-    }),
-  });
+  return request<CartCheckoutResponse>(
+    accessToken,
+    `/customers/${encodeURIComponent(customerId)}/cart/checkout`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
 }
 
-export function isPayMongoCheckoutResponse(response: CartCheckoutResponse): response is PayMongoCheckoutResponse {
+export function isPayMongoCheckoutResponse(
+  response: CartCheckoutResponse,
+): response is PayMongoCheckoutResponse {
   return (
     typeof response === 'object' &&
     response !== null &&
     'checkoutUrl' in response &&
     typeof response.checkoutUrl === 'string'
   );
+}
+
+export function recoverCheckout(
+  accessToken: string,
+  customerId: string,
+  input: CheckoutRequestInput,
+): Promise<CheckoutRecoveryResult> {
+  return request<CheckoutRecoveryResult>(
+    accessToken,
+    `/customers/${encodeURIComponent(customerId)}/cart/checkout/recover`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function isCheckoutReplay(
+  response: CartCheckoutResponse | CheckoutRecoveryResult,
+): response is CheckoutReplayResult {
+  return 'checkoutReplayed' in response && response.checkoutReplayed === true;
 }

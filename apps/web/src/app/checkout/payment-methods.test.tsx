@@ -1,3 +1,4 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +52,7 @@ vi.mock('@/lib/api/cart', async importOriginal => {
 });
 
 const cart: Cart = {
+  revision: 0,
   id: 'cart-1',
   customerId: 'customer-1',
   items: [
@@ -85,6 +87,7 @@ function setMethods(paymentMethods: PaymentProvider[]) {
 }
 
 beforeEach(() => {
+  vi.stubGlobal('indexedDB', new IDBFactory());
   mocks.getCart.mockReset().mockResolvedValue(cart);
   mocks.checkoutCart.mockReset().mockResolvedValue({ id: 'order-1' });
   mocks.replace.mockReset();
@@ -101,7 +104,7 @@ describe('Checkout payment capabilities', () => {
 
     expect(screen.queryByRole('radio', { name: /^PayMongo/ })).not.toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Place cash order' })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Place cash order' })).toBeEnabled());
   });
 
   it('offers PayMongo when enabled', async () => {
@@ -134,7 +137,7 @@ describe('Checkout payment capabilities', () => {
     await user.click(screen.getByRole('button', { name: 'Place cash order' }));
 
     await waitFor(() => {
-      expect(mocks.checkoutCart).toHaveBeenCalledExactlyOnceWith('customer-token', 'customer-1', 'cash');
+      expect(mocks.checkoutCart).toHaveBeenCalledExactlyOnceWith('customer-token', 'customer-1', expect.objectContaining({ paymentProvider: 'cash', cartRevision: 0, idempotencyKey: expect.any(String) }));
     });
   });
 

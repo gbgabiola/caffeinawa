@@ -8,7 +8,21 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import QueryProvider from '@/components/providers/QueryProvider';
 import StoreOrderingNotice from '@/features/store/StoreOrderingNotice';
 import { useStoreOrdering } from '@/hooks/useStoreOrdering';
-import { checkoutCart, getCart, isPayMongoCheckoutResponse, PaymentCheckoutUnavailableError } from '@/lib/api/cart';
+import {
+  checkoutCart,
+  getCart,
+  recoverCheckout,
+  isCheckoutReplay,
+  isPayMongoCheckoutResponse,
+  PaymentCheckoutUnavailableError,
+} from '@/lib/api/cart';
+import {
+  readCheckoutIntent,
+  getOrCreateCheckoutIntent,
+  markCheckoutResolved,
+  clearCheckoutIntent,
+} from '@/lib/checkout-intents';
+import type { CheckoutIntent } from '@/lib/checkout-intents';
 import { notifyCartChanged } from '@/lib/cart-events';
 
 import type { Cart, PaymentProvider } from '@caffeinawa/types';
@@ -53,9 +67,14 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
       ? (ordering.data?.paymentMethods ?? NO_PAYMENT_METHODS)
       : NO_PAYMENT_METHODS;
 
-  const availablePaymentMethods = paymentMethods.filter(method => enabledPaymentMethods.includes(method.value));
+  const availablePaymentMethods = paymentMethods.filter(method =>
+    enabledPaymentMethods.includes(method.value),
+  );
 
   const checkoutInFlight = useRef(false);
+  const active = useRef(true);
+  const [intentReady, setIntentReady] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<CheckoutIntent | null>(null);
 
   const [cart, setCart] = useState<Cart | null>(null);
   const [loadingCart, setLoadingCart] = useState(true);
@@ -70,12 +89,29 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    active.current = true;
+    let cancelled = false;
+    readCheckoutIntent(customerId)
+      .then(intent => {
+        if (!cancelled) {
+          setPendingIntent(intent);
+          setIntentReady(true);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to read checkout progress.');
+      });
+    return () => {
+      cancelled = true;
+      active.current = false;
+    };
+  }, [customerId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadCart() {
       setLoadingCart(true);
-      setError(null);
-
       try {
         const result = await getCart(accessToken, customerId);
 
@@ -102,46 +138,136 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
 
   const hasUnavailableItem = cart?.items.some(item => !item.coffee.available) ?? false;
 
-  async function handleCheckout() {
-    if (
-      !cart ||
-      cart.items.length === 0 ||
-      !canCheckout ||
-      !selectedPaymentProvider ||
-      hasUnavailableItem ||
-      checkoutInFlight.current
-    ) {
+  async function showOrder(intent: CheckoutIntent, orderId: string, paymentUnavailable = false) {
+    // Storage or cross-tab notification failure must not hide a committed order.
+    await markCheckoutResolved(intent, orderId).catch(() => undefined);
+    try {
+      notifyCartChanged(customerId);
+    } catch {
+      /* Best effort. */
+    }
+    if (active.current)
+      router.replace(
+        `/checkout/success?orderId=${encodeURIComponent(orderId)}${paymentUnavailable ? '&paymentCheckout=unavailable' : ''}`,
+      );
+  }
+
+  async function recover(
+    intent: CheckoutIntent,
+    failureMessage = 'No order was created. Review your cart before placing an order.',
+  ) {
+    if (intent.resolvedOrderId) {
+      await showOrder(intent, intent.resolvedOrderId, intent.paymentProvider === 'paymongo');
       return;
     }
+    const input = {
+      idempotencyKey: intent.idempotencyKey,
+      cartRevision: intent.cartRevision,
+      paymentProvider: intent.paymentProvider,
+    };
+    const result = await recoverCheckout(accessToken, customerId, input);
+    if (isCheckoutReplay(result)) {
+      await showOrder(intent, result.order.id, result.paymentProvider === 'paymongo');
+      return;
+    }
+    if (!('checkoutNotCreated' in result) || result.checkoutNotCreated !== true)
+      throw new Error('Unable to confirm your previous checkout. Check again before placing another order.');
+    await clearCheckoutIntent(intent);
+    if (active.current) {
+      setPendingIntent(null);
+      setError(failureMessage);
+      setRefreshCount(count => count + 1);
+      checkoutInFlight.current = false;
+      setSubmitting(false);
+    }
+  }
 
+  async function handleRecovery() {
+    if (!pendingIntent || checkoutInFlight.current) return;
     checkoutInFlight.current = true;
     setSubmitting(true);
     setError(null);
-
     try {
-      const result = await checkoutCart(accessToken, customerId, selectedPaymentProvider);
-      notifyCartChanged(customerId);
+      await recover(pendingIntent);
+    } catch {
+      if (active.current) {
+        setError(
+          'We could not confirm your previous checkout. Check again or view your orders before placing another order.',
+        );
+        checkoutInFlight.current = false;
+        setSubmitting(false);
+      }
+    }
+  }
 
-      if (isPayMongoCheckoutResponse(result)) {
-        window.location.assign(result.checkoutUrl);
+  async function handleCheckout() {
+    if (
+      !cart ||
+      !cart.items.length ||
+      !canCheckout ||
+      !selectedPaymentProvider ||
+      hasUnavailableItem ||
+      checkoutInFlight.current ||
+      !intentReady ||
+      pendingIntent
+    )
+      return;
+    checkoutInFlight.current = true;
+    setSubmitting(true);
+    setError(null);
+    let intent: CheckoutIntent | undefined;
+    try {
+      const saved = await getOrCreateCheckoutIntent(customerId, selectedPaymentProvider, cart.revision);
+      intent = saved.intent;
+      if (!active.current) return;
+      setPendingIntent(intent);
+      if (!saved.created) {
+        await recover(intent);
         return;
       }
-
-      router.replace(`/checkout/success?orderId=${encodeURIComponent(result.id)}`);
+      const input = {
+        idempotencyKey: intent.idempotencyKey,
+        cartRevision: intent.cartRevision,
+        paymentProvider: intent.paymentProvider,
+      };
+      const result = await checkoutCart(accessToken, customerId, input);
+      if (isCheckoutReplay(result)) {
+        await showOrder(intent, result.order.id, result.paymentProvider === 'paymongo');
+      } else if (isPayMongoCheckoutResponse(result)) {
+        await markCheckoutResolved(intent, result.order.id).catch(() => undefined);
+        try {
+          notifyCartChanged(customerId);
+        } catch {
+          /* Best effort. */
+        }
+        if (active.current) window.location.assign(result.checkoutUrl);
+      } else {
+        await showOrder(intent, result.id);
+      }
     } catch (err) {
-      if (err instanceof PaymentCheckoutUnavailableError) {
-        // The server created the order and cleared the cart.
-        notifyCartChanged(customerId);
-
-        router.replace(`/checkout/success?orderId=${encodeURIComponent(err.orderId)}&paymentCheckout=unavailable`);
-
+      if (intent && err instanceof PaymentCheckoutUnavailableError) {
+        await showOrder(intent, err.orderId, true);
         return;
       }
-
-      checkoutInFlight.current = false;
-      setSubmitting(false);
-
-      setError(err instanceof Error ? err.message : 'Unable to place your order.');
+      if (intent) {
+        try {
+          await recover(intent, err instanceof Error ? err.message : 'Unable to place your order.');
+          return;
+        } catch {
+          /* Keep the saved request until recovery can reach the server. */
+        }
+      }
+      if (active.current) {
+        checkoutInFlight.current = false;
+        setSubmitting(false);
+        setError(
+          intent
+            ? 'We could not confirm your checkout. Check previous checkout before placing another order.'
+            : err instanceof Error
+              ? err.message
+              : 'Unable to save checkout progress.',
+        );
+      }
     }
   }
 
@@ -164,7 +290,9 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
           </Link>
         )}
 
-        <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">One step closer</p>
+        <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-accent">
+          One step closer
+        </p>
 
         <h1 className="mt-3 font-display text-4xl tracking-[-0.04em] sm:text-5xl">Make it your moment.</h1>
 
@@ -176,8 +304,31 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
           <StoreOrderingNotice />
         </div>
 
+        {pendingIntent && (
+          <section
+            aria-label="Previous checkout"
+            className="mt-6 rounded-xl border border-cafe-border bg-cafe-paper p-5"
+          >
+            <p className="text-sm">Check your previous checkout before placing another order.</p>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void handleRecovery()}
+              className="mt-3 min-h-11 rounded-full bg-cafe-espresso px-5 text-sm text-white disabled:opacity-50"
+            >
+              Check previous checkout
+            </button>
+            <Link href="/orders" className="ml-4 text-sm underline">
+              View your orders
+            </Link>
+          </section>
+        )}
+
         {error && (
-          <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p
+            role="alert"
+            className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
             {error}
           </p>
         )}
@@ -236,7 +387,9 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
                         <label
                           key={method.value}
                           className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
-                            selected ? 'border-cafe-accent bg-cafe-soft' : 'border-cafe-border hover:bg-cafe-cream'
+                            selected
+                              ? 'border-cafe-accent bg-cafe-soft'
+                              : 'border-cafe-border hover:bg-cafe-cream'
                           } ${submitting ? 'cursor-wait opacity-70' : ''}`}
                         >
                           <input
@@ -251,7 +404,9 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
                           <span>
                             <span className="block text-sm font-semibold">{method.title}</span>
 
-                            <span className="mt-1 block text-sm leading-6 text-cafe-muted">{method.description}</span>
+                            <span className="mt-1 block text-sm leading-6 text-cafe-muted">
+                              {method.description}
+                            </span>
                           </span>
                         </label>
                       );
@@ -314,7 +469,9 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
               <div className="mt-5 flex items-center justify-between gap-4 border-t border-cafe-border pt-5">
                 <span className="font-medium">Total</span>
 
-                <span className="text-2xl font-semibold tabular-nums">{currencyFormatter.format(cart.total)}</span>
+                <span className="text-2xl font-semibold tabular-nums">
+                  {currencyFormatter.format(cart.total)}
+                </span>
               </div>
 
               {hasUnavailableItem && (
@@ -326,7 +483,9 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
               <button
                 type="button"
                 onClick={() => void handleCheckout()}
-                disabled={submitting || hasUnavailableItem || !canCheckout}
+                disabled={
+                  submitting || hasUnavailableItem || !canCheckout || !intentReady || pendingIntent !== null
+                }
                 className="mt-6 flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting
@@ -380,7 +539,9 @@ export default function CheckoutPage() {
         <section className="w-full max-w-lg rounded-3xl border border-cafe-border bg-cafe-paper p-8 text-center">
           <h1 className="font-display text-3xl">Sign in to checkout</h1>
 
-          <p className="mt-4 text-sm leading-7 text-cafe-muted">Sign in to review your cart and place your order.</p>
+          <p className="mt-4 text-sm leading-7 text-cafe-muted">
+            Sign in to review your cart and place your order.
+          </p>
 
           <Link
             href="/login?next=%2Fcheckout"
