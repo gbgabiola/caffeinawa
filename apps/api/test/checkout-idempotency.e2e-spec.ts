@@ -16,6 +16,7 @@ import {
 import { AppModule } from '../src/app.module.js';
 import { CartService } from '../src/cart/cart.service.js';
 import { PrismaService } from '../src/database/prisma.service.js';
+import { PayMongoService } from '../src/payment/paymongo.service.js';
 import { PaymentService } from '../src/payment/payment.service.js';
 
 describe('Durable checkout requests (database e2e)', () => {
@@ -43,7 +44,15 @@ describe('Durable checkout requests (database e2e)', () => {
     }
     const module = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PayMongoService)
+      .useValue({
+        prepareCheckoutSession: () => ({
+          requestBody: '{}',
+          scopeHash: 'synthetic-test-scope',
+        }),
+      })
+      .compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(
@@ -86,13 +95,11 @@ describe('Durable checkout requests (database e2e)', () => {
       data: { acceptingOrders: true },
     });
     customerId = await newCustomer();
-    token = await app
-      .get(JwtService)
-      .signAsync({
-        sub: customerId,
-        email: 'test@example.test',
-        role: 'CUSTOMER',
-      });
+    token = await app.get(JwtService).signAsync({
+      sub: customerId,
+      email: 'test@example.test',
+      role: 'CUSTOMER',
+    });
     const cart = await service.addItem(customerId, { coffeeId, quantity: 2 });
     revision = cart.revision;
     key = randomUUID();

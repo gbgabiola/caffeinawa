@@ -9,7 +9,7 @@ import type { Payment } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
-import { PayMongoService } from './paymongo.service.js';
+import { PayMongoCheckoutService } from './paymongo-checkout.service.js';
 import { PaymentService } from './payment.service.js';
 
 const paymentId = 'payment-1';
@@ -87,7 +87,7 @@ function createHarness() {
 
   const service = new PaymentService(
     prisma as unknown as PrismaService,
-    {} as PayMongoService,
+    {} as PayMongoCheckoutService,
   );
 
   return { service, prisma, tx };

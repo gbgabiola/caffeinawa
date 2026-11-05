@@ -448,6 +448,7 @@ export class CartService {
             status: PaymentStatus.PENDING,
           },
         });
+        await this.paymentService.preparePayMongoCheckout(tx, createdOrder.id);
       }
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.update({

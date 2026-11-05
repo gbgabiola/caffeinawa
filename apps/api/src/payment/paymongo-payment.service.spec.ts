@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentService } from './payment.service.js';
-import { PayMongoService } from './paymongo.service.js';
+import { PayMongoCheckoutService } from './paymongo-checkout.service.js';
 
 const paymentId = 'payment-1';
 const orderId = 'order-1';
@@ -104,7 +104,7 @@ function createHarness() {
     },
   } as unknown as PrismaService;
 
-  const service = new PaymentService(prisma, {} as PayMongoService);
+  const service = new PaymentService(prisma, {} as PayMongoCheckoutService);
 
   return {
     service,

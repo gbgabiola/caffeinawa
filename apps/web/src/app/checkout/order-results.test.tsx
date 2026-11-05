@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   clearResolved: vi.fn(),
 }));
 
+vi.mock('@/components/checkout/PaymentRecovery', () => ({ default: () => null }));
+
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));

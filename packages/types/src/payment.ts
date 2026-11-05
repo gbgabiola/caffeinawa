@@ -16,3 +16,12 @@ export interface Payment {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface PaymentCheckoutStatus {
+  canResume: boolean;
+  message: string;
+}
+
+export type PaymentResumeResult =
+  | { status: 'ready'; checkoutUrl: string }
+  | { status: 'awaiting_confirmation' | 'unavailable'; message: string };

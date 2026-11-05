@@ -1,5 +1,7 @@
 'use client';
 
+import { redirectToPayMongo } from '@/lib/payment-navigation';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -240,7 +242,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
         } catch {
           /* Best effort. */
         }
-        if (active.current) window.location.assign(result.checkoutUrl);
+        if (active.current) redirectToPayMongo(result.checkoutUrl);
       } else {
         await showOrder(intent, result.id);
       }

@@ -18,7 +18,7 @@ const input = {
   customerEmail: 'customer@example.com',
 };
 
-function payload(url = 'https://checkout.example.com/session') {
+function payload(url = 'https://checkout.paymongo.com/session') {
   return {
     data: {
       id: 'cs_fixture',
@@ -33,6 +33,18 @@ function payload(url = 'https://checkout.example.com/session') {
 
 describe('PayMongo checkout transport', () => {
   let service: PayMongoService;
+  async function createSession() {
+    const prepared = service.prepareCheckoutSession(input);
+    return service.createCheckoutSession(
+      {
+        ...prepared,
+        paymentId: '00000000-0000-4000-8000-000000000001',
+        createdAt: new Date(),
+        startedAt: new Date(),
+      },
+      input.orderId,
+    );
+  }
 
   beforeEach(() => {
     fetchMock.mockReset();
@@ -55,9 +67,9 @@ describe('PayMongo checkout transport', () => {
 
   it('makes one bounded, redirect-free request and returns the validated session', async () => {
     fetchMock.mockResolvedValue(Response.json(payload()));
-    await expect(service.createCheckoutSession(input)).resolves.toEqual({
+    await expect(createSession()).resolves.toEqual({
       sessionId: 'cs_fixture',
-      checkoutUrl: 'https://checkout.example.com/session',
+      checkoutUrl: 'https://checkout.paymongo.com/session',
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
       'https://api.paymongo.com/v2/checkout_sessions',
@@ -104,9 +116,7 @@ describe('PayMongo checkout transport', () => {
     payload('/session'),
   ])('rejects malformed or unsafe session responses', async (body) => {
     fetchMock.mockResolvedValue(Response.json(body));
-    await expect(service.createCheckoutSession(input)).rejects.toBeInstanceOf(
-      BadGatewayException,
-    );
+    await expect(createSession()).rejects.toBeInstanceOf(BadGatewayException);
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
@@ -115,11 +125,11 @@ describe('PayMongo checkout transport', () => {
       Response.json({
         data: {
           ...payload().data,
-          attributes: { checkout_url: 'https://checkout.example.com/session' },
+          attributes: { checkout_url: 'https://checkout.paymongo.com/session' },
         },
       }),
     );
-    await expect(service.createCheckoutSession(input)).resolves.toMatchObject({
+    await expect(createSession()).resolves.toMatchObject({
       sessionId: 'cs_fixture',
     });
   });
@@ -130,9 +140,7 @@ describe('PayMongo checkout transport', () => {
       const response = new Response('private-provider-body', { status });
       const readBody = vi.spyOn(response, 'text');
       fetchMock.mockResolvedValue(response);
-      const error = await service
-        .createCheckoutSession(input)
-        .catch((cause: unknown) => cause);
+      const error = await createSession().catch((cause: unknown) => cause);
       expect(error).toBeInstanceOf(BadGatewayException);
       expect(JSON.stringify(error)).not.toContain('private-provider-body');
       expect(Logger.prototype.warn).toHaveBeenCalledWith(
@@ -149,9 +157,7 @@ describe('PayMongo checkout transport', () => {
     fetchMock.mockRejectedValue(
       new Error('private transport details synthetic-provider-key'),
     );
-    const error = await service
-      .createCheckoutSession(input)
-      .catch((cause: unknown) => cause);
+    const error = await createSession().catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(BadGatewayException);
     expect(JSON.stringify(error)).not.toContain('private transport');
     expect(
@@ -162,9 +168,7 @@ describe('PayMongo checkout transport', () => {
 
   it('maps invalid JSON to a safe provider failure', async () => {
     fetchMock.mockResolvedValue(new Response('private-invalid-json'));
-    const error = await service
-      .createCheckoutSession(input)
-      .catch((cause: unknown) => cause);
+    const error = await createSession().catch((cause: unknown) => cause);
     expect(error).toBeInstanceOf(BadGatewayException);
     expect(JSON.stringify(error)).not.toContain('private-invalid-json');
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -182,9 +186,8 @@ describe('PayMongo checkout transport', () => {
           );
         }),
     );
-    const rejected = expect(
-      service.createCheckoutSession(input),
-    ).rejects.toBeInstanceOf(BadGatewayException);
+    const rejected =
+      expect(createSession()).rejects.toBeInstanceOf(BadGatewayException);
     await vi.advanceTimersByTimeAsync(10_000);
     await rejected;
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -195,14 +198,14 @@ describe('PayMongo checkout transport', () => {
   it('clears the deadline after successful requests', async () => {
     vi.useFakeTimers();
     fetchMock.mockResolvedValue(Response.json(payload()));
-    await service.createCheckoutSession(input);
+    await createSession();
     expect(vi.getTimerCount()).toBe(0);
   });
 
   it('rejects missing configuration before making a provider request', async () => {
     vi.stubEnv('PAYMONGO_SECRET_KEY', '');
     service = new PayMongoService();
-    await expect(service.createCheckoutSession(input)).rejects.toBeInstanceOf(
+    await expect(createSession()).rejects.toBeInstanceOf(
       InternalServerErrorException,
     );
     expect(fetchMock).not.toHaveBeenCalled();
@@ -216,7 +219,7 @@ describe('PayMongo checkout transport', () => {
     vi.stubEnv('PAYMONGO_MODE', mode);
     vi.stubEnv('PAYMONGO_API_URL', 'http://localhost:3009');
     service = new PayMongoService();
-    await expect(service.createCheckoutSession(input)).rejects.toBeInstanceOf(
+    await expect(createSession()).rejects.toBeInstanceOf(
       InternalServerErrorException,
     );
     expect(fetchMock).not.toHaveBeenCalled();
@@ -242,9 +245,7 @@ describe('PayMongo checkout transport', () => {
         throw new Error('Missing test listener');
       vi.stubEnv('PAYMONGO_API_URL', `http://127.0.0.1:${address.port}`);
       service = new PayMongoService();
-      await expect(service.createCheckoutSession(input)).rejects.toBeInstanceOf(
-        BadGatewayException,
-      );
+      await expect(createSession()).rejects.toBeInstanceOf(BadGatewayException);
       await closed;
       expect(fetchMock).toHaveBeenCalledOnce();
     } finally {

@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 import type { Order } from '@caffeinawa/types';
 
+import PaymentRecovery from '@/components/checkout/PaymentRecovery';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { clearResolvedCheckout } from '@/lib/checkout-intents';
 import { getOrder } from '@/lib/api/orders';
@@ -216,10 +217,11 @@ function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: Order
                 role="alert"
                 className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-950"
               >
-                Payment checkout could not be opened. Your order already exists. Keep this reference and contact the
-                store for help before placing another order. This message does not confirm whether payment completed.
+                Your order already exists. Check the payment options below or contact the store before placing another order. This message does not confirm whether payment completed.
               </p>
             )}
+
+            {order?.status === 'pending' && <PaymentRecovery key={`${orderId}:${accessToken}`} orderId={orderId} accessToken={accessToken} />}
 
             {checking && order && (
               <p role="status" className="mt-5 text-sm text-cafe-muted">
