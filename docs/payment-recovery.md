@@ -76,15 +76,17 @@ lost responses, concurrent recovery and persistence failures never cause a secon
 POST. They also cover crash-before-claim recovery, known-session retrieval,
 credential changes, age cutoff, ownership, disabled payments and settlement races.
 
-Before enabling payment acceptance, validate real signed paid-webhook delivery in
-the merchant's test account. The current [Hosted Checkout guide](https://docs.paymongo.com/docs/payment-channels-hosted-checkout)
-shows a different envelope from the legacy validator. A captured test-mode event
-is required to establish actual delivery format, signature verification, duplicate
-handling and delayed settlement. Use Postman with a development/test API and
-command-scoped `DATABASE_URL="$TEST_DATABASE_URL"`; keep credentials in secure
-environment storage and never replace the normal database URL. No real transfer
-is needed for verification.
+Signed paid-webhook delivery was verified on November 5, 2026 using an official
+sandbox QR Ph checkout and PayMongo's simulator, with an isolated local test
+database. The actual event used the formal event envelope and included paid
+amount/currency evidence. It committed PAID / CONFIRMED state; replaying the
+authenticated event preserved settlement. The Dashboard's incomplete default
+sample was correctly rejected. See [signed webhook verification](paymongo-webhook-validation.md)
+for the exact evidence, safeguards and reproducible command.
 
-Production stays closed and cash-only until that account/webhook validation is
-complete. The additive migrations run through the existing API start command.
-No new paid service, background worker, queue or polling job is required.
+Production remains closed and cash-only. The account's pre-existing webhook did
+not target the current Render webhook URL and was left unchanged. Register the
+correct production endpoint with its matching signing secret and verify merchant
+mode/configuration before enabling acceptance. The additive migrations run
+through the existing API start command. No new paid service, background worker,
+queue or polling job is required.

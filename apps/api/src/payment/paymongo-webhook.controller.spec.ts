@@ -27,6 +27,13 @@ function createEvent(eventType = 'checkout_session.payment.paid') {
           id: 'cs_test_123',
           type: 'checkout_session' as const,
           attributes: {
+            payments: [
+              {
+                id: 'pay_test_123',
+                type: 'payment',
+                attributes: { status: 'paid', amount: 25000, currency: 'PHP' },
+              },
+            ],
             reference_number: 'order_test_123',
             payment_intent: {
               id: 'pi_test_123',
@@ -53,7 +60,9 @@ function signBody(
   const signatureKey = options.mode === 'live' ? 'li' : 'te';
 
   const digest = createHmac('sha256', secret)
-    .update(`${timestamp}.${rawBody.toString('utf8')}`)
+    .update(timestamp)
+    .update('.')
+    .update(rawBody)
     .digest('hex');
 
   return `t=${timestamp},${signatureKey}=${digest}`;
@@ -296,6 +305,7 @@ describe('PayMongoWebhookController', () => {
     process.env.PAYMONGO_MODE = 'live';
 
     const event = createEvent();
+    event.data.attributes.livemode = true;
     const { signature, request, rawBody } = signedRequest(event, {
       mode: 'live',
     });
@@ -323,6 +333,243 @@ describe('PayMongoWebhookController', () => {
       controller.handleWebhook(wrongSignature, request),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+  });
+  it('acknowledges an unrelated resource event without attempting settlement', async () => {
+    const event = createEvent('payment.failed');
+    const payload = {
+      data: {
+        ...event.data,
+        attributes: {
+          ...event.data.attributes,
+          data: {
+            id: 'pay_other',
+            type: 'payment',
+            attributes: { status: 'failed' },
+          },
+        },
+      },
+    };
+    const signed = signedRequest(payload);
+    await expect(
+      controller.handleWebhook(signed.signature, signed.request),
+    ).resolves.toEqual({ received: true });
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+  });
+
+  it('rejects a signed event whose resource mode conflicts with the endpoint mode', async () => {
+    const event = createEvent();
+    event.data.attributes.livemode = true;
+    const signed = signedRequest(event);
+    await expect(
+      controller.handleWebhook(signed.signature, signed.request),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', 'invalid'])(
+    'fails closed for unconfigured mode %s',
+    async (mode) => {
+      const signed = signedRequest(createEvent());
+      if (mode === undefined) delete process.env.PAYMONGO_MODE;
+      else process.env.PAYMONGO_MODE = mode;
+      await expect(
+        controller.handleWebhook(signed.signature, signed.request),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['t', 'te'])(
+    'rejects duplicate %s signature fields, including empty duplicates',
+    async (field) => {
+      const signed = signedRequest(createEvent());
+      for (const duplicate of [
+        field === 't'
+          ? `t=${currentTimestamp()}`
+          : signed.signature.split(',')[1]!,
+        `${field}=`,
+      ]) {
+        await expect(
+          controller.handleWebhook(
+            `${signed.signature},${duplicate}`,
+            signed.request,
+          ),
+        ).rejects.toBeInstanceOf(UnauthorizedException);
+      }
+      expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+    },
+  );
+
+  it('verifies exact raw bytes and rejects invalid UTF-8 after authentication', async () => {
+    const event = createEvent('payment.failed');
+    const text = JSON.stringify(event).replace('evt_test_123', 'evt_RAW');
+    const rawBody = Buffer.from(text.replace('evt_RAW', 'evt_bad_'));
+    const marker = rawBody.indexOf(Buffer.from('evt_bad_')) + 4;
+    rawBody[marker] = 0xff;
+    const rawRequest = { rawBody } as Request & { rawBody: Buffer };
+    await expect(
+      controller.handleWebhook(signBody(rawBody), rawRequest),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    const normalized = Buffer.from(rawBody.toString('utf8'));
+    await expect(
+      controller.handleWebhook(signBody(normalized), rawRequest),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    (a: Record<string, unknown>) => {
+      a.payments = [];
+    },
+    (a: Record<string, unknown>) => {
+      delete a.payments;
+    },
+    (a: Record<string, unknown>) => {
+      a.reference_number = '';
+    },
+    (a: Record<string, unknown>) => {
+      delete a.reference_number;
+    },
+    (a: Record<string, unknown>) => {
+      a.livemode = true;
+    },
+    (a: Record<string, unknown>) => {
+      a.payments = [
+        {
+          id: 'pay_pending',
+          type: 'payment',
+          attributes: { status: 'pending', amount: 25000, currency: 'PHP' },
+        },
+      ];
+    },
+    (a: Record<string, unknown>) => {
+      a.payments = [
+        {
+          id: 'pay_a',
+          type: 'payment',
+          attributes: { status: 'paid', amount: 25000, currency: 'PHP' },
+        },
+        {
+          id: 'pay_b',
+          type: 'payment',
+          attributes: { status: 'paid', amount: 25000, currency: 'PHP' },
+        },
+      ];
+    },
+    ...[0, -1, 1.5, '25000', Number.MAX_SAFE_INTEGER + 1].map(
+      (amount) => (a: Record<string, unknown>) => {
+        a.payments = [
+          {
+            id: 'pay_a',
+            type: 'payment',
+            attributes: { status: 'paid', amount, currency: 'PHP' },
+          },
+        ];
+      },
+    ),
+    ...['php', null, ''].map((currency) => (a: Record<string, unknown>) => {
+      a.payments = [
+        {
+          id: 'pay_a',
+          type: 'payment',
+          attributes: { status: 'paid', amount: 25000, currency },
+        },
+      ];
+    }),
+    (a: Record<string, unknown>) => {
+      a.payments = [
+        {
+          id: 'pay_a',
+          type: 'payment',
+          attributes: {
+            status: 'paid',
+            amount: 25000,
+            currency: 'PHP',
+            livemode: true,
+          },
+        },
+      ];
+    },
+    (a: Record<string, unknown>) => {
+      a.payments = [
+        {
+          id: 'pay_a',
+          type: 'payment',
+          attributes: {
+            status: 'paid',
+            amount: 25000,
+            currency: 'PHP',
+            payment_intent_id: 'pi_other',
+          },
+        },
+      ];
+    },
+  ])(
+    'rejects malformed paid evidence %# before calling settlement',
+    async (mutate) => {
+      const event = createEvent();
+      mutate(event.data.attributes.data.attributes);
+      const signed = signedRequest(event);
+      await expect(
+        controller.handleWebhook(signed.signature, signed.request),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts one paid payment alongside failed attempts without treating them as paid', async () => {
+    const event = createEvent();
+    event.data.attributes.data.attributes.payments.unshift({
+      id: 'pay_failed',
+      type: 'payment',
+      attributes: { status: 'failed', amount: 100, currency: 'PHP' },
+    });
+    const signed = signedRequest(event);
+    await expect(
+      controller.handleWebhook(signed.signature, signed.request),
+    ).resolves.toEqual({ received: true });
+    expect(paymentService.handlePayMongoPaymentPaid).toHaveBeenCalledOnce();
+  });
+
+  it('accepts paid amount evidence when Hosted Checkout omits the optional payment resource type', async () => {
+    const event = createEvent();
+    const payment = event.data.attributes.data.attributes.payments[0]!;
+    Reflect.deleteProperty(payment, 'type');
+    const signed = signedRequest(event);
+    await expect(
+      controller.handleWebhook(signed.signature, signed.request),
+    ).resolves.toEqual({ received: true });
+    expect(paymentService.handlePayMongoPaymentPaid).toHaveBeenCalledOnce();
+  });
+
+  it.each(['missing amount and currency', 'incorrect resource type'])(
+    'rejects incomplete or conflicting Dashboard payment evidence: %s',
+    async (scenario) => {
+      const event = createEvent();
+      const payment = event.data.attributes.data.attributes.payments[0]!;
+      if (scenario === 'missing amount and currency') {
+        Reflect.deleteProperty(payment, 'type');
+        Reflect.deleteProperty(payment.attributes, 'amount');
+        Reflect.deleteProperty(payment.attributes, 'currency');
+      } else payment.type = 'checkout_session';
+      const signed = signedRequest(event);
+      await expect(
+        controller.handleWebhook(signed.signature, signed.request),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an undocumented envelope instead of inventing an event identity', async () => {
+    const event = createEvent();
+    const signed = signedRequest({
+      event_type: 'send.webhook',
+      data: { ...event.data.attributes, resource: 'checkout_session' },
+    });
+    await expect(
+      controller.handleWebhook(signed.signature, signed.request),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(paymentService.handlePayMongoPaymentPaid).not.toHaveBeenCalled();
   });
 });

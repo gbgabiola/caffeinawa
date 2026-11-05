@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
+    "webhook:verify": "node scripts/verify-paymongo-webhook.mjs",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "typecheck": "tsc --noEmit"
   },

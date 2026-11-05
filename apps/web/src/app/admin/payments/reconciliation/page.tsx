@@ -27,6 +27,7 @@ const REASON_LABELS: Record<PaymentIssueReason, string> = {
   PAYMENT_NOT_FOUND: 'Payment not found',
   INVALID_PROVIDER: 'Invalid payment provider',
   ORDER_REFERENCE_MISMATCH: 'Order reference mismatch',
+  PAYMENT_DETAILS_MISMATCH: 'Payment amount or currency mismatch',
   INVALID_PAYMENT_STATUS: 'Invalid payment status',
   INVALID_ORDER_STATUS: 'Invalid order status',
   ORDER_NOT_FOUND: 'Order not found',

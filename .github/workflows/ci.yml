@@ -163,3 +163,20 @@ jobs:
             pnpm --filter api exec vitest run \
               --config ./vitest.config.e2e.ts \
               --no-file-parallelism
+
+      - name: Build API for isolated webhook verification
+        run: pnpm --filter api build
+
+      - name: Verify signed webhook receiver and database guard
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { spawnSync } from 'node:child_process';
+          const result = spawnSync(process.execPath, ['scripts/verify-paymongo-webhook.mjs', '--check'], {
+            cwd: 'apps/api', encoding: 'utf8', env: process.env,
+          });
+          assert.notEqual(result.status, 0);
+          assert.match(result.stderr, /DATABASE_URL must exactly equal TEST_DATABASE_URL/);
+          NODE
+          DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter api webhook:verify --self-test

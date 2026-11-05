@@ -8,7 +8,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import type { Payment } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentService } from './payment.service.js';
@@ -69,6 +69,13 @@ function makePaidEvent(
         id: overrides.checkoutSessionId ?? checkoutSessionId,
         type: 'checkout_session',
         attributes: {
+          payments: [
+            {
+              id: 'pay_test_123',
+              type: 'payment',
+              attributes: { status: 'paid', amount: 25000, currency: 'PHP' },
+            },
+          ],
           reference_number: overrides.referenceNumber ?? orderId,
           payment_intent: {
             id: overrides.paymentIntentId ?? 'pi_test_123',
@@ -116,7 +123,10 @@ function createHarness() {
 describe('PaymentService.handlePayMongoPaymentPaid', () => {
   let harness: ReturnType<typeof createHarness>;
 
+  afterEach(() => vi.unstubAllEnvs());
+
   beforeEach(() => {
+    vi.stubEnv('PAYMONGO_MODE', 'test');
     harness = createHarness();
 
     harness.tx.payment.findFirst.mockResolvedValue(makePayment());
@@ -461,4 +471,37 @@ describe('PaymentService.handlePayMongoPaymentPaid', () => {
       harness.prisma.paymentReconciliationIssue.upsert,
     ).not.toHaveBeenCalled();
   });
+  it.each([
+    { amount: 24999, currency: 'PHP' },
+    { amount: 25001, currency: 'PHP' },
+    { amount: 25000, currency: 'USD' },
+  ])(
+    'records mismatched payment details %j without settlement',
+    async (details) => {
+      const event = makePaidEvent();
+      Object.assign(
+        event.attributes.data.attributes.payments[0]!.attributes,
+        details,
+      );
+      await expect(
+        harness.service.handlePayMongoPaymentPaid(
+          event,
+          Buffer.from('signed-body'),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(harness.tx.payment.updateMany).not.toHaveBeenCalled();
+      expect(harness.tx.order.updateMany).not.toHaveBeenCalled();
+      expect(
+        harness.prisma.paymentReconciliationIssue.upsert,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            reason: PaymentIssueReason.PAYMENT_DETAILS_MISMATCH,
+            paymentId,
+            orderId,
+          }),
+        }),
+      );
+    },
+  );
 });
