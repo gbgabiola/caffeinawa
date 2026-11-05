@@ -82,12 +82,45 @@ fees without amount or currency. Rejecting that incomplete sample is intentional
 line items and fees are not proof of a matching paid amount. The Dashboard sample
 is therefore not a positive settlement test.
 
-The registered test-account webhook inspected during this work did not target
-the current Render API webhook URL. It was left unchanged. Production remains
-closed and cash-only; endpoint registration, signing-secret configuration and
-merchant test-mode delivery must be verified before enabling payment acceptance.
+## Deployed endpoint configuration (November 5, 2026)
+
+The existing test-account webhook originally pointed to an obsolete temporary
+tunnel. It was disabled to stop stale test retries, then updated to:
+
+`https://caffeinawa-api.onrender.com/api/webhooks/paymongo`
+
+It subscribes only to `checkout_session.payment.paid`. The existing signing
+secret was preserved and configured securely as `PAYMONGO_WEBHOOK_SECRET` on the
+Render service. `PAYMONGO_MODE=test` and `PAYMONGO_ENABLED=false` remain explicit.
+These values are service-level configuration; no secret values belong in this
+repository. Render's merge operation preserves unrelated settings and triggers a
+configuration deployment. Preserve the service-level secret configuration when
+managing future deployments; never replace the complete environment collection
+for a single-key change.
+
+After deployment, verify a correctly signed unrelated event returns 200 without
+settlement, and invalid signatures or event modes return 401. Re-enable the
+provider webhook only after those checks pass. This proves the deployed handler
+uses the matching secret and mode; it is not an additional genuine provider paid
+delivery. The genuine sandbox settlement evidence below used the isolated local
+test database.
+
+The deployed storefront remains closed and cash-only. This is **test-mode webhook
+configuration on the deployed API**, not live payment activation. Live merchant
+readiness, matching live API/webhook credentials and an explicitly authorized
+acceptance rollout remain separate requirements. Do not enable live payments by
+changing only `PAYMONGO_ENABLED`.
 
 ## Current evidence
+
+- The November 5 configuration deployment is live. The persistent test-mode
+  webhook is enabled at the deployed API URL with its matching signing secret.
+  Deployed HTTP probes returned 200 for a valid signed unrelated event, 401 for
+  an invalid signature, 401 for an incorrect event mode and 400 for incomplete
+  paid evidence. None reached settlement or required production test orders.
+- Readiness, storefront/menu access, protected-route rejection, CORS and ordering
+  cache headers passed after the configuration deployment. Ordering remained
+  closed and the public payment methods remained cash-only.
 
 - Local raw HTTP signature, settlement and duplicate self-test passed.
 - Database tests cover amount/currency mismatches, tampering, mode confusion,
