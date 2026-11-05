@@ -10,97 +10,19 @@ import {
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 
+import {
+  getPayMongoWebhookMode,
+  paidCheckoutDetails,
+  parsePayMongoEvent,
+} from './paymongo-webhook-event.js';
+import type { PayMongoWebhookEvent } from './paymongo-webhook-event.js';
+
 import { PaymentService } from './payment.service.js';
 
 const MAX_SIGNATURE_AGE_SECONDS = 300;
 
 interface PayMongoWebhookRequest extends Request {
   rawBody?: Buffer;
-}
-
-interface PayMongoWebhookEvent {
-  data: {
-    id: string;
-    type: 'event';
-    attributes: {
-      type: string;
-      livemode: boolean;
-      data: {
-        id: string;
-        type: 'checkout_session';
-        attributes: {
-          reference_number?: string;
-          payment_intent?: {
-            id?: string;
-          };
-        };
-      };
-    };
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isValidWebhookEvent(value: unknown): value is PayMongoWebhookEvent {
-  if (!isRecord(value) || !isRecord(value.data)) {
-    return false;
-  }
-
-  const event = value.data;
-
-  if (
-    typeof event.id !== 'string' ||
-    event.id.length === 0 ||
-    event.type !== 'event' ||
-    !isRecord(event.attributes)
-  ) {
-    return false;
-  }
-
-  const attributes = event.attributes;
-
-  if (
-    typeof attributes.type !== 'string' ||
-    attributes.type.length === 0 ||
-    typeof attributes.livemode !== 'boolean' ||
-    !isRecord(attributes.data)
-  ) {
-    return false;
-  }
-
-  const checkoutSession = attributes.data;
-
-  if (
-    typeof checkoutSession.id !== 'string' ||
-    checkoutSession.id.length === 0 ||
-    checkoutSession.type !== 'checkout_session' ||
-    !isRecord(checkoutSession.attributes)
-  ) {
-    return false;
-  }
-
-  const sessionAttributes = checkoutSession.attributes;
-
-  if (
-    sessionAttributes.reference_number !== undefined &&
-    typeof sessionAttributes.reference_number !== 'string'
-  ) {
-    return false;
-  }
-
-  const paymentIntent = sessionAttributes.payment_intent;
-
-  if (
-    paymentIntent !== undefined &&
-    (!isRecord(paymentIntent) ||
-      (paymentIntent.id !== undefined && typeof paymentIntent.id !== 'string'))
-  ) {
-    return false;
-  }
-
-  return true;
 }
 
 @Controller('webhooks/paymongo')
@@ -114,7 +36,11 @@ export class PayMongoWebhookController {
     signature: string | undefined,
     @Req() request: PayMongoWebhookRequest,
   ): Promise<{ received: true }> {
-    if (!signature || !request.rawBody) {
+    if (
+      typeof signature !== 'string' ||
+      !signature ||
+      !Buffer.isBuffer(request.rawBody)
+    ) {
       throw new UnauthorizedException('Missing PayMongo webhook signature');
     }
 
@@ -123,9 +49,10 @@ export class PayMongoWebhookController {
 
     const event = this.parseEvent(request.rawBody);
 
-    if (event.data.attributes.type === 'checkout_session.payment.paid') {
+    if (event.attributes.type === 'checkout_session.payment.paid') {
+      paidCheckoutDetails(event);
       await this.paymentService.handlePayMongoPaymentPaid(
-        event.data,
+        event,
         request.rawBody,
       );
     }
@@ -139,22 +66,28 @@ export class PayMongoWebhookController {
     let parsed: unknown;
 
     try {
-      parsed = JSON.parse(rawBody.toString('utf8'));
+      parsed = JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(rawBody),
+      );
     } catch {
       throw new BadRequestException('Invalid PayMongo webhook JSON payload');
     }
 
-    if (!isValidWebhookEvent(parsed)) {
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed) ||
+      !('data' in parsed)
+    ) {
       throw new BadRequestException('Invalid PayMongo webhook event payload');
     }
-
-    return parsed;
+    return parsePayMongoEvent(parsed.data);
   }
 
   private verifySignature(rawBody: Buffer, signatureHeader: string): void {
     const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
 
-    if (!webhookSecret) {
+    if (!webhookSecret?.trim()) {
       throw new UnauthorizedException(
         'PayMongo webhook secret is not configured',
       );
@@ -176,12 +109,18 @@ export class PayMongoWebhookController {
       })
       .filter(
         (part): part is { key: string; value: string } =>
-          part !== null && part.key.length > 0 && part.value.length > 0,
+          part !== null && part.key.length > 0,
       );
 
     const timestamp = parts.find((part) => part.key === 't')?.value;
 
-    const signatureKey = process.env.PAYMONGO_MODE === 'live' ? 'li' : 'te';
+    const signatureKey = getPayMongoWebhookMode() === 'live' ? 'li' : 'te';
+    if (
+      parts.filter((part) => part.key === 't').length !== 1 ||
+      parts.filter((part) => part.key === signatureKey).length !== 1
+    ) {
+      throw new UnauthorizedException('Invalid PayMongo webhook signature');
+    }
 
     const signature = parts.find((part) => part.key === signatureKey)?.value;
 
@@ -210,10 +149,10 @@ export class PayMongoWebhookController {
       throw new UnauthorizedException('Invalid PayMongo webhook signature');
     }
 
-    const payload = `${timestamp}.${rawBody.toString('utf8')}`;
-
     const expectedSignature = createHmac('sha256', webhookSecret)
-      .update(payload)
+      .update(timestamp)
+      .update('.')
+      .update(rawBody)
       .digest();
 
     const receivedSignature = Buffer.from(signature, 'hex');

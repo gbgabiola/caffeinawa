@@ -16,6 +16,10 @@ import {
 import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { PaymentEntity } from './entities/payment.entity.js';
+import {
+  paidCheckoutDetails,
+  parsePayMongoEvent,
+} from './paymongo-webhook-event.js';
 import { PayMongoCheckoutService } from './paymongo-checkout.service.js';
 
 import type { AdminPayment } from '@caffeinawa/types';
@@ -400,29 +404,17 @@ export class PaymentService {
   }
 
   async handlePayMongoPaymentPaid(
-    event: {
-      id: string;
-      type: string;
-      attributes: {
-        type: string;
-        livemode: boolean;
-        data: {
-          id: string;
-          type: string;
-          attributes: {
-            reference_number?: string;
-            payment_intent?: {
-              id?: string;
-            };
-          };
-        };
-      };
-    },
+    event: unknown,
     _rawBody: Buffer,
   ): Promise<void> {
-    const checkoutSessionId = event.attributes.data.id;
-    const referenceNumber = event.attributes.data.attributes.reference_number;
-    const paymentIntentId = event.attributes.data.attributes.payment_intent?.id;
+    const {
+      providerEventId,
+      checkoutSessionId,
+      referenceNumber,
+      paymentIntentId,
+      amountCents,
+      currency,
+    } = paidCheckoutDetails(parsePayMongoEvent(event));
 
     let paymentId: string | undefined;
     let orderId: string | undefined;
@@ -455,11 +447,21 @@ export class PaymentService {
           );
         }
 
-        if (referenceNumber && referenceNumber !== payment.orderId) {
+        if (referenceNumber !== payment.orderId) {
           issueReason = PaymentIssueReason.ORDER_REFERENCE_MISMATCH;
 
           throw new BadRequestException(
             'PayMongo order reference does not match payment order',
+          );
+        }
+
+        if (
+          currency !== payment.currency ||
+          !payment.amount.mul(100).equals(amountCents)
+        ) {
+          issueReason = PaymentIssueReason.PAYMENT_DETAILS_MISMATCH;
+          throw new BadRequestException(
+            'PayMongo payment amount or currency does not match',
           );
         }
 
@@ -484,7 +486,7 @@ export class PaymentService {
           data: {
             status: PaymentStatus.PAID,
             paymentIntentId,
-            providerEventId: event.id,
+            providerEventId: providerEventId,
             paidAt: new Date(),
           },
         });
@@ -566,10 +568,10 @@ export class PaymentService {
       try {
         await this.prisma.paymentReconciliationIssue.upsert({
           where: {
-            providerEventId: event.id,
+            providerEventId: providerEventId,
           },
           create: {
-            providerEventId: event.id,
+            providerEventId: providerEventId,
             checkoutSessionId,
             paymentId,
             orderId,
@@ -580,7 +582,7 @@ export class PaymentService {
         });
       } catch (auditError: unknown) {
         paymentLogger.error(
-          `Failed to record reconciliation issue for PayMongo event ${event.id}`,
+          `Failed to record reconciliation issue for PayMongo event ${providerEventId}`,
           auditError instanceof Error ? auditError.stack : String(auditError),
         );
       }

@@ -28,6 +28,13 @@ describe('PayMongo concurrent settlement (database e2e)', () => {
         id: checkoutSessionId,
         type: 'checkout_session',
         attributes: {
+          payments: [
+            {
+              id: 'pay_test_123',
+              type: 'payment',
+              attributes: { status: 'paid', amount: 25000, currency: 'PHP' },
+            },
+          ],
           reference_number: orderId,
           payment_intent: {
             id: 'pi_concurrency_test',

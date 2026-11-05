@@ -72,6 +72,13 @@ function makeWebhookEvent(eventType = 'checkout_session.payment.paid') {
           id: 'cs_test_123',
           type: 'checkout_session' as const,
           attributes: {
+            payments: [
+              {
+                id: 'pay_test_123',
+                type: 'payment',
+                attributes: { status: 'paid', amount: 25000, currency: 'PHP' },
+              },
+            ],
             reference_number: orderId,
             payment_intent: {
               id: 'pi_test_123',
