@@ -84,9 +84,13 @@ authenticated event preserved settlement. The Dashboard's incomplete default
 sample was correctly rejected. See [signed webhook verification](paymongo-webhook-validation.md)
 for the exact evidence, safeguards and reproducible command.
 
-Production remains closed and cash-only. The account's pre-existing webhook did
-not target the current Render webhook URL and was left unchanged. Register the
-correct production endpoint with its matching signing secret and verify merchant
-mode/configuration before enabling acceptance. The additive migrations run
+Production remains closed and cash-only. On November 5, 2026 the existing
+test-mode webhook was moved from its obsolete tunnel URL to the deployed Render
+webhook endpoint, with the matching signing secret configured securely on the
+service. `PAYMONGO_MODE=test` and `PAYMONGO_ENABLED=false` remain explicit. See the
+[deployed endpoint runbook](paymongo-webhook-validation.md#deployed-endpoint-configuration-november-5-2026)
+for deployment checks and the boundary between test configuration and live
+acceptance. Live merchant readiness and matching live credentials are still
+required before an explicitly authorized rollout. The additive migrations run
 through the existing API start command. No new paid service, background worker,
 queue or polling job is required.
