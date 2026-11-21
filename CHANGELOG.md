@@ -5,7 +5,14 @@ private workspace packages share one version. See [the versioning policy](docs/v
 
 ## [Unreleased]
 
-No changes recorded yet.
+### Security
+
+- Resolve SEC-001 by upgrading the API's transitive body-parser dependency from
+  2.3.0 to the patched 2.4.0 within Express's existing dependency range. Add isolated
+  HTTP regression checks for compressed JSON, malformed compressed bodies,
+  continued service, URL-encoded input and raw-body preservation.
+- Advisory: [GHSA-27r3-jxmh-p828](https://github.com/expressjs/body-parser/security/advisories/GHSA-27r3-jxmh-p828).
+  This records a source fix; deployment verification remains a separate gate.
 
 ## [0.1.0] - 2026-11-22
 
