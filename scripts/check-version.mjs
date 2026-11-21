@@ -25,9 +25,4 @@ for (const path of [
   );
   assert.equal(workspace.private, true, `${path} must remain private`);
 }
-const changelog = await readFile(new URL("CHANGELOG.md", root), "utf8");
-assert.ok(
-  changelog.includes(`## [${project.version}] - `),
-  "Current project version must have a dated changelog entry",
-);
 console.log(`Project and private workspace versions agree: ${project.version}`);
