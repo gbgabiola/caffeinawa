@@ -1,14 +1,17 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { AppModule } from '../src/app.module.js';
+import { PrismaService } from '../src/database/prisma.service.js';
 
 describe('Authentication flow (e2e)', () => {
   let app: INestApplication;
+  let prisma: PrismaService | undefined;
 
-  const email = `auth-e2e-${Date.now()}@example.com`;
+  const email = `auth-e2e-${randomUUID()}@example.test`;
   const password = 'TestPassword123!';
   const name = 'E2E Customer';
 
@@ -29,10 +32,16 @@ describe('Authentication flow (e2e)', () => {
     );
 
     await app.init();
+    prisma = app.get(PrismaService);
   });
 
   afterAll(async () => {
-    await app.close();
+    try {
+      // The unique email also covers a committed registration whose assertion fails.
+      await prisma?.customer.deleteMany({ where: { email } });
+    } finally {
+      await app?.close();
+    }
   });
 
   it('registers a customer without exposing the password hash', async () => {
