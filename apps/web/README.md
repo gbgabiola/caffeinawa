@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Caffeinawa storefront
 
-## Getting Started
+Next.js App Router/React storefront with menu/cart, account and order history,
+checkout recovery and admin screens. Shared contracts come from `packages/types`.
 
-First, run the development server:
+## Development
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Run the root setup in [the project README](../../README.md). Configure
+`apps/web/.env.local` securely with `NEXT_PUBLIC_API_URL` pointing to the API,
+including its `/api` prefix (locally `http://localhost:3001/api`). Public variables
+are embedded in browser assets: never place secrets in them.
+
+```sh
+pnpm --filter web dev
+pnpm --filter web test
+pnpm --filter web typecheck
+pnpm --filter web lint
+STATIC_EXPORT=true pnpm --filter web build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run these from the workspace root. The development site is on localhost:3000.
+Build shared types after changing shared constants/contracts.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Cloudflare Pages
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The existing Pages project exports `apps/web/out`. `STATIC_EXPORT=true` enables
+static export and trailing slashes; images are unoptimized. Supply the deployed
+API URL at build time. Do not introduce Next server routes or server API fetching
+during static builds. Production follows `main`; inspect its actual build result.
 
-## Learn More
+Verify menu, authentication redirects, order-result routes and admin route loading.
+Server guards enforce authorization; frontend admin gating is not an access-control
+boundary. Do not create production orders for deployment verification.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Store availability and payment methods come from the API. URL parameters never
+prove payment; order status is fetched through authenticated endpoints. Unknown
+checkout outcomes retain their IndexedDB intent; consult order history before
+placing another order after clearing storage or switching devices. See the
+[API recovery runbooks](../api/README.md#checkout-request-recovery).
