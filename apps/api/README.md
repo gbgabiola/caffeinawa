@@ -50,12 +50,23 @@ $ pnpm run start:prod
 # unit tests
 $ pnpm run test
 
-# e2e tests
-$ pnpm run test:e2e
+# e2e tests (TEST_DATABASE_URL must already be exported securely in this shell)
+$ DATABASE_URL="$TEST_DATABASE_URL" pnpm run test:e2e
 
 # test coverage
 $ pnpm run test:cov
 ```
+
+Database-backed E2E tests fail during configuration, before loading suites, unless
+`DATABASE_URL` exactly equals `TEST_DATABASE_URL` and is a valid PostgreSQL URL
+whose decoded database name contains `test` (case-insensitive). This applies to
+the complete suite and filtered/direct Vitest runs using `vitest.config.e2e.ts`.
+The guard never replaces a URL automatically. Keep the normal `DATABASE_URL`
+pointing to `caffeinawa`; use only command-scoped overrides for test commands.
+Do not print connection strings or commit environment values.
+
+The authentication-flow suite removes only its uniquely named customer fixture,
+including when assertions fail. Existing unrelated test data is not removed.
 
 ## Deployment
 
