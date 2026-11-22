@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  Logger,
   BadRequestException,
   ConflictException,
   NotFoundException,
@@ -165,10 +166,38 @@ describe('Coffee image uploads', () => {
       override = value;
       await expect(service.attach(id, png)).rejects.toThrow(
         BadGatewayException,
+        Logger,
       );
       expect(prisma.coffee.updateMany).not.toHaveBeenCalled();
     },
   );
+
+  it('logs only a safe classification when provider credentials are rejected', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: { message: 'Invalid API key private-provider-key' },
+        }),
+        { status: 401 },
+      ),
+    );
+    await expect(service.attach(id, png)).rejects.toThrow(BadGatewayException);
+    expect(warn).toHaveBeenCalledWith({
+      event: 'coffee_image_upload_failed',
+      stage: 'provider-rejection:credentials',
+      status: 401,
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(
+      'private-provider-key',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(prisma.coffee.updateMany).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it.each(['network', 'http', 'invalid-json', 'oversized-body'])(
     'returns a safe error without retrying on %s failure',
     async (kind) => {
