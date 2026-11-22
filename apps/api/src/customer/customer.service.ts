@@ -7,9 +7,14 @@ import { Prisma } from '@prisma/client';
 
 import { toPaginatedResponse } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { AdminCustomerEntity } from './entities/admin-customer.entity.js';
 import { CustomerEntity } from './entities/customer.entity.js';
 
-import type { Customer } from '@caffeinawa/types';
+import type {
+  AdminCustomer,
+  Customer,
+  PaginatedResponse,
+} from '@caffeinawa/types';
 import type { AdminCustomerQueryDto } from './dto/admin-customer-query.dto.js';
 import type { CreateCustomerDto } from './dto/create-customer.dto.js';
 import type { UpdateCustomerDto } from './dto/update-customer.dto.js';
@@ -32,7 +37,9 @@ export class CustomerService {
     throw error;
   }
 
-  async findAll(query: AdminCustomerQueryDto) {
+  async findAll(
+    query: AdminCustomerQueryDto,
+  ): Promise<PaginatedResponse<AdminCustomer>> {
     const { page, pageSize, search } = query;
     const where: Prisma.CustomerWhereInput = search
       ? {
@@ -53,14 +60,14 @@ export class CustomerService {
     });
 
     return toPaginatedResponse(
-      customers.map((customer) => this.toEntity(customer)),
+      customers.map((customer) => new AdminCustomerEntity(customer)),
       normalizedPage,
       pageSize,
       total,
     );
   }
 
-  async findOne(id: string): Promise<Customer> {
+  private async findRecord(id: string) {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
     });
@@ -69,7 +76,15 @@ export class CustomerService {
       throw new NotFoundException(`Customer "${id}" not found`);
     }
 
-    return this.toEntity(customer);
+    return customer;
+  }
+
+  async findOne(id: string): Promise<Customer> {
+    return this.toEntity(await this.findRecord(id));
+  }
+
+  async findOneAdmin(id: string): Promise<AdminCustomer> {
+    return new AdminCustomerEntity(await this.findRecord(id));
   }
 
   async create(dto: CreateCustomerDto): Promise<Customer> {
@@ -87,7 +102,7 @@ export class CustomerService {
     }
   }
 
-  async update(id: string, dto: UpdateCustomerDto): Promise<Customer> {
+  private async updateRecord(id: string, dto: UpdateCustomerDto) {
     await this.findOne(id);
 
     try {
@@ -99,10 +114,21 @@ export class CustomerService {
         },
       });
 
-      return this.toEntity(customer);
+      return customer;
     } catch (error) {
       this.handlePrismaError(error);
     }
+  }
+
+  async update(id: string, dto: UpdateCustomerDto): Promise<Customer> {
+    return this.toEntity(await this.updateRecord(id, dto));
+  }
+
+  async updateAdmin(
+    id: string,
+    dto: UpdateCustomerDto,
+  ): Promise<AdminCustomer> {
+    return new AdminCustomerEntity(await this.updateRecord(id, dto));
   }
 
   async remove(id: string): Promise<void> {

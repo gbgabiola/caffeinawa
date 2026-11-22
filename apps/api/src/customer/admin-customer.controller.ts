@@ -26,11 +26,11 @@ export class AdminCustomerController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.customerService.findOne(id);
+    return this.customerService.findOneAdmin(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-    return this.customerService.update(id, dto);
+    return this.customerService.updateAdmin(id, dto);
   }
 }
