@@ -107,6 +107,8 @@ export class CoffeeImageService {
     );
 
     let imageUrl: string;
+    let uploadStage = 'request';
+    let providerStatus: number | undefined;
     try {
       // One attempt only. A timeout can leave an unattached provider asset.
       const response = await fetch(
@@ -118,7 +120,9 @@ export class CoffeeImageService {
           redirect: 'error',
         },
       );
-      if (!response.ok || !response.body) throw new Error();
+      providerStatus = response.status;
+      uploadStage = response.ok ? 'response-body' : 'provider-rejection';
+      if (!response.body) throw new Error();
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let size = 0;
@@ -141,6 +145,32 @@ export class CoffeeImageService {
       );
       if (!result || typeof result !== 'object') throw new Error();
       const data = result as Record<string, unknown>;
+      if (!response.ok) {
+        // Classify known provider messages without logging their contents,
+        // which may contain keys, signatures or other request data.
+        const error = data.error;
+        const message =
+          error &&
+          typeof error === 'object' &&
+          'message' in error &&
+          typeof error.message === 'string'
+            ? error.message
+            : '';
+        const reason = /api.?key|signature|authentication|credentials/i.test(
+          message,
+        )
+          ? 'credentials'
+          : /cloud.?name/i.test(message)
+            ? 'cloud-name'
+            : /quota|limit|credit/i.test(message)
+              ? 'quota'
+              : /preset/i.test(message)
+                ? 'preset'
+                : 'other';
+        uploadStage = `provider-rejection:${reason}`;
+        throw new Error();
+      }
+      uploadStage = 'response-fields';
       if (
         data.public_id !== publicId ||
         data.resource_type !== 'image' ||
@@ -152,9 +182,15 @@ export class CoffeeImageService {
       )
         throw new Error();
       const expected = `https://res.cloudinary.com/${cloud}/image/upload/v${data.version}/${publicId}.webp`;
+      uploadStage = 'response-url';
       if (data.secure_url !== expected) throw new Error();
       imageUrl = expected;
     } catch {
+      this.logger.warn({
+        event: 'coffee_image_upload_failed',
+        stage: uploadStage,
+        status: providerStatus,
+      });
       throw new BadGatewayException(
         'Photo upload failed. The current photo was kept. Check Cloudinary before retrying an uncertain upload.',
       );
