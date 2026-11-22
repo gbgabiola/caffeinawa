@@ -101,3 +101,22 @@ The deployed webhook path is `/api/webhooks/paymongo`. Preserve its matching
 service-level signing secret and mode; never replace the complete environment
 collection to change one setting. Live merchant acceptance, credentials, backup
 recovery and authorized rollout remain separate release gates.
+
+## Coffee photo uploads
+
+Admins can attach JPEG, PNG or WebP photos up to 3 MB and 8 megapixels. The API
+re-encodes them as WebP and stores the Cloudinary delivery URL and public ID in
+Neon. Existing external image URLs remain supported. No uploads are stored on
+Render's filesystem.
+
+Set `COFFEE_IMAGE_UPLOAD_ENABLED=true` only after securely configuring
+`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` on the API.
+Leave the flag unset or false to disable uploads without affecting the URL option.
+Never expose the secret in frontend variables or commit its value. Use the Free
+account without paid add-ons and monitor its shared storage/bandwidth allowance.
+
+Photo upload is a separate operation after saving coffee details. On photo failure,
+the form retains the saved coffee ID for retry; it does not create another coffee.
+Uploads are not automatically retried. Review ambiguous or unattached assets and
+superseded photos in Cloudinary before removing them; the API does not automatically
+delete provider assets on replacement or database failure.

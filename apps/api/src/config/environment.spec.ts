@@ -144,3 +144,44 @@ describe('validateEnvironment', () => {
     }
   });
 });
+
+describe('Coffee upload configuration', () => {
+  const base = {
+    JWT_SECRET: 'test-secret',
+    DATABASE_URL: 'postgresql://user:pass@localhost/caffeinawa',
+    WEB_URL: 'http://localhost:3000',
+  };
+  it('allows uploads to remain disabled without provider credentials', () => {
+    expect(() => validateEnvironment(base)).not.toThrow();
+  });
+  it('requires credentials when enabled', () => {
+    expect(() =>
+      validateEnvironment({ ...base, COFFEE_IMAGE_UPLOAD_ENABLED: 'true' }),
+    ).toThrow(/CLOUDINARY_CLOUD_NAME is required/);
+  });
+  it('accepts valid enabled configuration', () => {
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        COFFEE_IMAGE_UPLOAD_ENABLED: 'true',
+        CLOUDINARY_CLOUD_NAME: 'test-cloud',
+        CLOUDINARY_API_KEY: 'test-key',
+        CLOUDINARY_API_SECRET: 'private-test-secret',
+      }),
+    ).not.toThrow();
+  });
+  it('rejects invalid flag and cloud names without echoing secrets', () => {
+    expect(() =>
+      validateEnvironment({ ...base, COFFEE_IMAGE_UPLOAD_ENABLED: 'yes' }),
+    ).toThrow(/must be true or false/);
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        COFFEE_IMAGE_UPLOAD_ENABLED: 'true',
+        CLOUDINARY_CLOUD_NAME: 'https://untrusted.example',
+        CLOUDINARY_API_KEY: 'key',
+        CLOUDINARY_API_SECRET: 'private-test-secret',
+      }),
+    ).toThrow(/CLOUDINARY_CLOUD_NAME is invalid/);
+  });
+});

@@ -101,7 +101,7 @@ export class CoffeeService {
   }
 
   async update(id: string, dto: UpdateCoffeeDto): Promise<Coffee> {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
     const coffee = await this.prisma.coffee.update({
       where: { id },
       data: {
@@ -112,7 +112,11 @@ export class CoffeeService {
         }),
         ...(dto.price !== undefined && { price: dto.price }),
         ...(dto.available !== undefined && { available: dto.available }),
-        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
+        ...(dto.imageUrl !== undefined &&
+          dto.imageUrl !== existing.imageUrl && {
+            imageUrl: dto.imageUrl,
+            imagePublicId: null,
+          }),
       },
     });
 

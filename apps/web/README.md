@@ -37,3 +37,7 @@ prove payment; order status is fetched through authenticated endpoints. Unknown
 checkout outcomes retain their IndexedDB intent; consult order history before
 placing another order after clearing storage or switching devices. See the
 [API recovery runbooks](../api/README.md#checkout-request-recovery).
+
+Admin coffee forms accept a photo attachment or image URL. Upload configuration
+and limits are documented in the [API README](../api/README.md#coffee-photo-uploads).
+Cloudinary credentials belong only on the API, never in public web variables.
