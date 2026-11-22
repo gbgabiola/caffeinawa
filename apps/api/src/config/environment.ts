@@ -123,6 +123,20 @@ export function validateEnvironment(
     }
   }
 
+  if (
+    env.COFFEE_IMAGE_UPLOAD_ENABLED !== undefined &&
+    !['true', 'false'].includes(env.COFFEE_IMAGE_UPLOAD_ENABLED)
+  ) {
+    errors.push('COFFEE_IMAGE_UPLOAD_ENABLED must be true or false');
+  }
+  if (env.COFFEE_IMAGE_UPLOAD_ENABLED === 'true') {
+    const cloud = requireValue('CLOUDINARY_CLOUD_NAME');
+    requireValue('CLOUDINARY_API_KEY');
+    requireValue('CLOUDINARY_API_SECRET');
+    if (cloud && !/^[a-z0-9_-]+$/.test(cloud))
+      errors.push('CLOUDINARY_CLOUD_NAME is invalid');
+  }
+
   if (env.PORT !== undefined) {
     const port = Number(env.PORT);
 

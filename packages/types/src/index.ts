@@ -27,3 +27,4 @@ export type {
 } from './payment.js';
 export type { StoreOrderingStatus } from './store.js';
 export { MAX_CART_ITEM_QUANTITY } from './cart-limits.js';
+export { COFFEE_IMAGE_MAX_BYTES, COFFEE_IMAGE_TYPES } from './coffee.js';

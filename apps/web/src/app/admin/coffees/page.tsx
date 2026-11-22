@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import CoffeePhotoPicker from '@/components/admin/CoffeePhotoPicker';
 import AdminListState from '@/components/admin/AdminListState';
 import AdminListToolbar from '@/components/admin/AdminListToolbar';
 import AdminTable, { AdminTableBody, AdminTableHead } from '@/components/admin/AdminTable';
@@ -14,7 +15,7 @@ import FormField from '@/components/ui/FormField';
 import { ADMIN_PAGE_SIZE } from '@/constants/admin';
 import { useAdminListQuery } from '@/hooks/useAdminListQuery';
 import { useAdminListState } from '@/hooks/useAdminListState';
-import { createAdminCoffee, deleteAdminCoffee, getAdminCoffees, updateAdminCoffee } from '@/lib/api/admin-coffees';
+import { createAdminCoffee, deleteAdminCoffee, getAdminCoffees, updateAdminCoffee, getCoffeeImageUploadStatus, uploadAdminCoffeeImage } from '@/lib/api/admin-coffees';
 
 import type { Coffee, CoffeeCategory } from '@caffeinawa/types';
 
@@ -76,6 +77,9 @@ export default function AdminCoffeesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingCoffeeId, setEditingCoffeeId] = useState<string | null>(null);
   const [form, setForm] = useState<CoffeeFormState>(EMPTY_COFFEE_FORM);
+  const [editorKey, setEditorKey] = useState(0);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const saving = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -84,16 +88,17 @@ export default function AdminCoffeesPage() {
 
   const editingCoffee = coffees.find(coffee => coffee.id === editingCoffeeId);
 
-  const hasChanges = editingCoffee
+  const hasChanges = Boolean(imageFile) || (editingCoffee
     ? form.name.trim() !== editingCoffee.name.trim() ||
       form.description.trim() !== editingCoffee.description.trim() ||
       form.category !== editingCoffee.category ||
       Number(form.price) !== editingCoffee.price ||
       form.available !== editingCoffee.available ||
       form.imageUrl.trim() !== (editingCoffee.imageUrl ?? '').trim()
-    : false;
+    : false);
 
   function resetForm() {
+    setImageFile(null);
     setForm(EMPTY_COFFEE_FORM);
     setIsCreating(false);
     setEditingCoffeeId(null);
@@ -102,6 +107,8 @@ export default function AdminCoffeesPage() {
   }
 
   function startCreating() {
+    setEditorKey(value => value + 1);
+    setImageFile(null);
     setForm(EMPTY_COFFEE_FORM);
     setIsCreating(true);
     setEditingCoffeeId(null);
@@ -110,6 +117,8 @@ export default function AdminCoffeesPage() {
   }
 
   function startEditing(coffee: Coffee) {
+    setEditorKey(value => value + 1);
+    setImageFile(null);
     setForm({
       name: coffee.name,
       description: coffee.description,
@@ -126,7 +135,7 @@ export default function AdminCoffeesPage() {
   }
 
   async function handleSave() {
-    if (!accessToken) {
+    if (!accessToken || saving.current) {
       return;
     }
 
@@ -151,45 +160,38 @@ export default function AdminCoffeesPage() {
       return;
     }
 
+    saving.current = true;
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
 
     try {
-      if (editingCoffeeId) {
-        await updateAdminCoffee(accessToken, editingCoffeeId, {
-          name,
-          description,
-          category: form.category,
-          price,
-          available: form.available,
-          imageUrl: imageUrl || undefined,
-        });
-        await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
-        setEditingCoffeeId(null);
-        setForm(EMPTY_COFFEE_FORM);
-        setSaveError(null);
-        setSaveSuccess('Coffee updated successfully.');
-      } else {
-        await createAdminCoffee(accessToken, {
-          name,
-          description,
-          category: form.category,
-          price,
-          available: form.available,
-          ...(imageUrl ? { imageUrl } : {}),
-        });
-
-        await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
-        setIsCreating(false);
-        setEditingCoffeeId(null);
-        setForm(EMPTY_COFFEE_FORM);
-        setSaveError(null);
-        setSaveSuccess('Coffee created successfully.');
+      if (imageFile) {
+        const status = await getCoffeeImageUploadStatus(accessToken);
+        if (!status.enabled) throw new Error('Photo uploads are not configured. You can still use an image URL.');
       }
+      const input = { name, description, category: form.category, price, available: form.available, ...(imageUrl ? { imageUrl } : {}) };
+      const saved = editingCoffeeId
+        ? await updateAdminCoffee(accessToken, editingCoffeeId, input)
+        : await createAdminCoffee(accessToken, input);
+      if (imageFile) {
+        // Keep the committed ID if the separate photo operation fails.
+        setEditingCoffeeId(saved.id);
+        setIsCreating(false);
+        try {
+          await uploadAdminCoffeeImage(accessToken, saved.id, imageFile);
+        } catch (error) {
+          await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
+          throw new Error(`Coffee saved, but photo upload failed. ${error instanceof Error ? error.message : 'Retry the photo upload.'}`);
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'coffees'] });
+      resetForm();
+      setSaveSuccess(editingCoffeeId ? 'Coffee updated successfully.' : 'Coffee created successfully.');
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to save coffee.');
     } finally {
+      saving.current = false;
       setIsSaving(false);
     }
   }
@@ -255,7 +257,7 @@ export default function AdminCoffeesPage() {
         )}
 
         {saveError && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {saveError}
           </div>
         )}
@@ -327,9 +329,12 @@ export default function AdminCoffeesPage() {
                 />
               </FormField>
 
+              <CoffeePhotoPicker key={editorKey} file={imageFile} imageUrl={form.imageUrl} disabled={isSaving} onSelect={setImageFile} />
+
               <FormField htmlFor="coffee-image-url" label="Image URL">
                 <input
                   id="coffee-image-url"
+                  disabled={isSaving || Boolean(imageFile)}
                   type="url"
                   value={form.imageUrl}
                   onChange={event =>

@@ -39,3 +39,13 @@ export function updateAdminCoffee(
 export function deleteAdminCoffee(accessToken: string, coffeeId: string): Promise<void> {
   return adminRequest<void>(accessToken, `/admin/coffees/${encodeURIComponent(coffeeId)}`, { method: 'DELETE' });
 }
+
+export function getCoffeeImageUploadStatus(accessToken: string): Promise<{ enabled: boolean }> {
+  return adminRequest(accessToken, '/admin/coffee-images/status');
+}
+
+export function uploadAdminCoffeeImage(accessToken: string, coffeeId: string, file: File): Promise<{ imageUrl: string }> {
+  return adminRequest(accessToken, `/admin/coffee-images/${encodeURIComponent(coffeeId)}`, {
+    method: 'POST', body: file, headers: { 'Content-Type': file.type }, signal: AbortSignal.timeout(30_000),
+  });
+}
