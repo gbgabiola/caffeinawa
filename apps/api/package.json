@@ -10,7 +10,6 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "db:seed": "tsx prisma/seed.ts",
-    "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint": "oxlint src/ test/",
     "postinstall": "prisma skills sync || exit 0",
@@ -45,7 +44,6 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
-    "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
     "@types/express": "^5.0.0",
