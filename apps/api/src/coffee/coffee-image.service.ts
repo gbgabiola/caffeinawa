@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { PrismaService } from '../database/prisma.service.js';
 
 @Injectable()
 export class CoffeeImageService {
+  private readonly logger = new Logger(CoffeeImageService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   isEnabled(): boolean {
@@ -42,6 +44,7 @@ export class CoffeeImageService {
     if (!coffee) throw new NotFoundException('Coffee not found.');
 
     let image: Buffer;
+    let stage = 'metadata';
     try {
       const input = sharp(bytes, {
         limitInputPixels: 8_000_000,
@@ -53,7 +56,8 @@ export class CoffeeImageService {
         !['jpeg', 'png', 'webp'].includes(meta.format) ||
         (meta.pages ?? 1) !== 1
       )
-        throw new Error();
+        throw new Error('Unsupported image format or animation');
+      stage = 'conversion';
       image = await input
         .rotate()
         .resize({
@@ -64,7 +68,14 @@ export class CoffeeImageService {
         })
         .webp({ quality: 80 })
         .toBuffer();
-    } catch {
+    } catch (error: unknown) {
+      // Decoder errors contain no provider credentials. Keep diagnostics bounded
+      // and server-side so deployment failures can be distinguished from bad files.
+      const reason =
+        error instanceof Error
+          ? error.message.replace(/[\r\n]/g, ' ').slice(0, 240)
+          : 'Unknown decoder error';
+      this.logger.warn({ event: 'coffee_image_decode_failed', stage, reason });
       throw new BadRequestException(
         'Use a valid, non-animated JPEG, PNG or WebP photo up to 8 megapixels.',
       );

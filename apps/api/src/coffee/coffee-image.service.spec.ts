@@ -84,6 +84,21 @@ describe('Coffee image uploads', () => {
     });
   });
 
+  it('accepts a 1920 by 2880 JPEG and resizes its longest edge to 1600 pixels', async () => {
+    const jpeg = await sharp({
+      create: { width: 1920, height: 2880, channels: 3, background: 'brown' },
+    })
+      .jpeg()
+      .toBuffer();
+    await service.attach(id, jpeg);
+    const form = fetchMock.mock.calls[0][1].body as FormData;
+    const file = form.get('file') as File;
+    const meta = await sharp(Buffer.from(await file.arrayBuffer())).metadata();
+    expect(meta.format).toBe('webp');
+    expect(meta.height).toBe(1600);
+    expect(meta.width).toBeLessThanOrEqual(1600);
+  });
+
   it('does not upload or write when disabled', async () => {
     vi.stubEnv('COFFEE_IMAGE_UPLOAD_ENABLED', 'false');
     await expect(service.attach(id, png)).rejects.toThrow(
