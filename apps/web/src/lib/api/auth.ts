@@ -77,8 +77,10 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
   return response.json();
 }
 
-export async function getCurrentCustomer(accessToken: string): Promise<LoginCustomer> {
+export async function getCurrentCustomer(accessToken: string, signal?: AbortSignal): Promise<LoginCustomer> {
+  const timeout = AbortSignal.timeout(15_000);
   const response = await fetch(`${API_URL}/auth/me`, {
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
