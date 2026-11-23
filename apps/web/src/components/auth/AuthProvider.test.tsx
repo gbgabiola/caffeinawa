@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthRequestError } from '@/lib/api/auth';
 import { AuthProvider, useAuth } from './AuthProvider';
@@ -101,7 +101,64 @@ beforeEach(() => {
   mocks.updateCurrentCustomer.mockReset();
 });
 
+afterEach(() => { vi.useRealTimers(); });
+
+function sessionToken(exp: number) {
+  return `e30.${window.btoa(JSON.stringify({ exp }))}.signature`;
+}
+
 describe('AuthProvider session synchronization', () => {
+  it('clears a stored expired token without waiting for the API', () => {
+    window.localStorage.setItem(TOKEN_KEY, sessionToken(Math.floor(Date.now() / 1000) - 1));
+    mocks.getCurrentCustomer.mockImplementation(() => new Promise(() => {}));
+    renderSession();
+    expect(screen.getByText('Signed out')).toBeInTheDocument();
+    expect(window.localStorage.getItem(TOKEN_KEY)).toBeNull();
+    expect(mocks.getCurrentCustomer).not.toHaveBeenCalled();
+  });
+
+  it('signs out at expiry while a session request is still pending', async () => {
+    vi.useFakeTimers();
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    vi.setSystemTime(now);
+    window.localStorage.setItem(TOKEN_KEY, sessionToken(now / 1000 + 5));
+    mocks.getCurrentCustomer.mockImplementation(() => new Promise(() => {}));
+    renderSession();
+    const signal = mocks.getCurrentCustomer.mock.calls[0][1] as AbortSignal;
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByText('Signed out')).toBeInTheDocument();
+    expect(signal.aborted).toBe(true);
+    expect(window.localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+
+  it('checks expiry immediately when a suspended tab regains focus', async () => {
+    vi.useFakeTimers();
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    vi.setSystemTime(now);
+    window.localStorage.setItem(TOKEN_KEY, sessionToken(now / 1000 + 30));
+    mocks.getCurrentCustomer.mockResolvedValue(firstCustomer);
+    renderSession();
+    await act(async () => {});
+    expect(screen.getByText('Customer One')).toBeInTheDocument();
+    vi.setSystemTime(now + 60000);
+    act(() => { window.dispatchEvent(new Event('focus')); });
+    expect(screen.getByText('Signed out')).toBeInTheDocument();
+  });
+
+  it('does not let an old expiry timer clear a replacement session', async () => {
+    vi.useFakeTimers();
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    vi.setSystemTime(now);
+    window.localStorage.setItem(TOKEN_KEY, sessionToken(now / 1000 + 5));
+    mocks.getCurrentCustomer.mockResolvedValue(firstCustomer);
+    renderSession();
+    await act(async () => {});
+    act(() => { changeTokenFromAnotherTab(sessionToken(now / 1000 + 60)); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByText('Customer One')).toBeInTheDocument();
+    expect(window.localStorage.getItem(TOKEN_KEY)).not.toBeNull();
+  });
+
   it('restores the customer belonging to the stored token', async () => {
     window.localStorage.setItem(TOKEN_KEY, 'token-one');
 
@@ -111,7 +168,7 @@ describe('AuthProvider session synchronization', () => {
 
     expect(await screen.findByText('Customer One')).toBeInTheDocument();
 
-    expect(mocks.getCurrentCustomer).toHaveBeenCalledExactlyOnceWith('token-one');
+    expect(mocks.getCurrentCustomer).toHaveBeenCalledExactlyOnceWith('token-one', expect.any(AbortSignal));
   });
 
   it('signs out when another tab removes the token', async () => {

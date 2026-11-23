@@ -113,6 +113,23 @@ function getServerHydrationSnapshot() {
   return false;
 }
 
+// This unverified claim is only a local sign-out hint. Authentication and roles
+// still come from the API; a future expiry never establishes a valid session.
+function tokenExpiresAt(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload: unknown = JSON.parse(window.atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload || typeof payload !== 'object' || !('exp' in payload)) return null;
+    const exp = payload.exp;
+    return typeof exp === 'number' && Number.isSafeInteger(exp) && exp > 0 && exp <= Number.MAX_SAFE_INTEGER / 1000
+      ? exp * 1000
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -157,12 +174,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (token === null) return;
 
     let cancelled = false;
+    const controller = new AbortController();
+    const expiresAt = tokenExpiresAt(token);
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function expireIfNeeded() {
+      if (cancelled || getSnapshot() !== token || expiresAt === null) return false;
+      if (Date.now() < expiresAt) return false;
+      setAccessToken(null);
+      setSession(EMPTY_SESSION);
+      setSessionFailure(null);
+      controller.abort();
+      return true;
+    }
+
+    function scheduleExpiry() {
+      if (expireIfNeeded() || expiresAt === null) return;
+      // Browsers throttle timers in background tabs and cap timeout delays.
+      clearTimeout(expiryTimer);
+      expiryTimer = setTimeout(scheduleExpiry, Math.min(Math.max(expiresAt - Date.now(), 1), 2_147_483_647));
+    }
+
+    if (expireIfNeeded()) return;
+    scheduleExpiry();
+    window.addEventListener('focus', scheduleExpiry);
+    document.addEventListener('visibilitychange', scheduleExpiry);
 
     function isCurrentRequest() {
       return !cancelled && getSnapshot() === token;
     }
 
-    getCurrentCustomer(token)
+    getCurrentCustomer(token, controller.signal)
       .then(customer => {
         if (!isCurrentRequest()) return;
 
@@ -192,6 +234,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       cancelled = true;
+      controller.abort();
+      clearTimeout(expiryTimer);
+      window.removeEventListener('focus', scheduleExpiry);
+      document.removeEventListener('visibilitychange', scheduleExpiry);
     };
   }, [token, profileRefreshVersion]);
 
