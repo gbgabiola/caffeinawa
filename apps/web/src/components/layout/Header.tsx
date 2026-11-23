@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -55,9 +56,17 @@ export function Header() {
         <Link
           href="/"
           onClick={closeMobileMenu}
-          className="shrink-0 font-display text-2xl font-bold tracking-[-0.06em] sm:text-3xl"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-sm"
         >
-          Caffeinawa
+          <Image
+            src="/images/caffeinawa-logo.webp"
+            alt="Caffeinawa"
+            width={960}
+            height={960}
+            unoptimized
+            loading="eager"
+            className="h-16 w-16 object-contain sm:h-20 sm:w-20"
+          />
         </Link>
 
         <nav aria-label="Main navigation" className="hidden md:block">
