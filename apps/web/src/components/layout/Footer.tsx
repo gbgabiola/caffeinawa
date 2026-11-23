@@ -84,16 +84,15 @@ export function Footer() {
 
         <div className="mt-8 flex flex-col gap-2 border-t border-cafe-border pt-5 text-xs text-cafe-muted sm:flex-row sm:items-center sm:justify-between">
           <p>© 2024–2026 Caffeinawa</p>
-          <p>
-            Site code licensed under the{' '}
-            <a
-              href="https://github.com/gbgabiola/caffeinawa/blob/main/LICENSE"
-              className="underline underline-offset-4 hover:text-cafe-espresso"
-            >
-              MIT License
-            </a>
-            .
-          </p>
+          <a
+            href="https://www.facebook.com/caffeinawa"
+            className="inline-flex min-h-11 items-center gap-2 self-start underline-offset-4 hover:text-cafe-espresso hover:underline"
+          >
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 shrink-0">
+              <path d="M14 21v-8h3l.5-4H14V7c0-1.2.4-2 2-2h2V1.4A24 24 0 0 0 15 1c-3 0-5 1.8-5 5v3H7v4h3v8h4Z" />
+            </svg>
+            <span>Facebook</span>
+          </a>
         </div>
       </div>
     </footer>
