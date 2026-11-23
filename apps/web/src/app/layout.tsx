@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import SessionNotice from '@/components/auth/SessionNotice';
 import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
 
 import './globals.css';
 
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           >
             {children}
           </div>
+          <Footer />
         </AuthProvider>
       </body>
     </html>
