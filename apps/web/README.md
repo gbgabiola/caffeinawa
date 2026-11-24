@@ -1,46 +1,39 @@
-# Caffeinawa storefront
+# Caffeinawa web
 
-Next.js App Router/React storefront with menu/cart, account and order history,
-checkout recovery and admin screens. Shared contracts come from `packages/types`.
+Next.js App Router storefront and admin interface. Follow the
+[root setup](../../README.md) first. Run commands from the repository root.
 
-## Development
+## Environment
 
-Run the root setup in [the project README](../../README.md). Configure
-`apps/web/.env.local` securely with `NEXT_PUBLIC_API_URL` pointing to the API,
-including its `/api` prefix (locally `http://localhost:3001/api`). Public variables
-are embedded in browser assets: never place secrets in them.
+Copy `.env.example` to `apps/web/.env.local` on first setup.
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | API base URL including `/api`; defaults to `http://localhost:3001/api`. Embedded at build time and public. |
+| `STATIC_EXPORT` | Set to `true` for Cloudflare Pages; leave false for development. |
+
+Keep credentials on the API, never in public web variables.
+
+## Commands
 
 ```sh
 pnpm --filter web dev
 pnpm --filter web test
-pnpm --filter web typecheck
 pnpm --filter web lint
+pnpm --filter web typecheck
 STATIC_EXPORT=true pnpm --filter web build
 ```
 
-Run these from the workspace root. The development site is on localhost:3000.
-Build shared types after changing shared constants/contracts.
+Cloudflare Pages builds from `main` and publishes `apps/web/out`. Set the deployed
+API URL at build time. Static export uses trailing slashes and unoptimized images;
+server routes and server API fetching during builds are unsupported.
 
-## Cloudflare Pages
+## Behavior
 
-The existing Pages project exports `apps/web/out`. `STATIC_EXPORT=true` enables
-static export and trailing slashes; images are unoptimized. Supply the deployed
-API URL at build time. Do not introduce Next server routes or server API fetching
-during static builds. Production follows `main`; inspect its actual build result.
+The sun/moon switch follows the system theme until a manual choice is saved.
+Store availability and payment methods come from the API. Payment return URLs do
+not prove payment; authenticated order status is authoritative.
 
-Verify menu, authentication redirects, order-result routes and admin route loading.
-Server guards enforce authorization; frontend admin gating is not an access-control
-boundary. Do not create production orders for deployment verification.
-
-Store availability and payment methods come from the API. URL parameters never
-prove payment; order status is fetched through authenticated endpoints. Unknown
-checkout outcomes retain their IndexedDB intent; consult order history before
-placing another order after clearing storage or switching devices. See the
-[API recovery runbooks](../api/README.md#checkout-request-recovery).
-
-Admin coffee forms accept a photo attachment or image URL. Upload configuration
-and limits are documented in the [API README](../api/README.md#coffee-photo-uploads).
-Cloudinary credentials belong only on the API, never in public web variables.
-
-The sun/moon switch follows the system theme by default. A visitor's manual
-light/dark choice is saved in their browser and synchronized across tabs.
+Unknown checkout outcomes retain their recovery request in IndexedDB. Check order
+history before ordering again after clearing storage or switching devices.
+Admin photo limits and payment recovery are covered in the [API README](../api/README.md).

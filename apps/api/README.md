@@ -1,122 +1,100 @@
 # Caffeinawa API
 
-NestJS API with Prisma/PostgreSQL. Run commands below from the repository root.
+NestJS API with Prisma/PostgreSQL. Follow the [root setup](../../README.md) first.
+Run commands from the repository root. Routes use the `/api` prefix.
 
-## Setup
+## Environment
 
-Use the root frozen pnpm install, build shared types and generate Prisma first
-(see [root README](../../README.md)). Securely configure `apps/api/.env`:
-`DATABASE_URL` (normal caffeinawa database), `JWT_SECRET` (strong private secret),
-`WEB_URL` (storefront HTTP(S) origin only), and optional `PORT` (default 3001).
-Use `PAYMONGO_ENABLED=false` for cash-only operation. Enabling payments additionally
-requires matching `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET` and
-`PAYMONGO_MODE=test|live`. Never commit these values.
+Copy `.env.example` to `apps/api/.env` on first setup. Keep values private.
 
-`AUTH_CLIENT_IP_SOURCE` defaults to `socket`. The deployed Render web service uses
-`render-cloudflare`; do not blindly enable Express trust proxy or trust arbitrary
-forwarding headers. The limiter is in memory on one instance and resets on restart.
+| Variable | Required / default |
+| --- | --- |
+| `DATABASE_URL` | Required PostgreSQL connection URL for the normal application database. |
+| `JWT_SECRET` | Required strong, private signing secret. |
+| `WEB_URL` | Required storefront HTTP(S) origin, without a path, credentials, query or fragment. |
+| `PORT` | Optional; `3001`. |
+| `AUTH_CLIENT_IP_SOURCE` | Optional; `socket` locally. Use `render-cloudflare` only on the configured Render web service. |
+| `TEST_DATABASE_URL` | Required only for database tests; separate database with `test` in its name. |
+| `PAYMONGO_ENABLED` | Optional; `false` for cash-only new checkout. |
+| `PAYMONGO_MODE` | `test` or `live`; required when PayMongo is enabled. |
+| `PAYMONGO_SECRET_KEY` | Required when PayMongo is enabled; match the selected mode. |
+| `PAYMONGO_WEBHOOK_SECRET` | Required when PayMongo is enabled and for receiving signed webhook events. |
+| `PAYMONGO_API_URL` | Optional; `https://api.paymongo.com`. Normally leave unchanged. |
+| `COFFEE_IMAGE_UPLOAD_ENABLED` | Optional; `false`. |
+| `CLOUDINARY_CLOUD_NAME` | Required when photo uploads are enabled; cloud name, not API key name. |
+| `CLOUDINARY_API_KEY` | Required when photo uploads are enabled. |
+| `CLOUDINARY_API_SECRET` | Required when photo uploads are enabled; API-only secret. |
 
-Review migrations before applying to any development database:
+Startup validates configuration. Keep webhook credentials available for outstanding
+payments even when new PayMongo checkout is disabled. Do not broadly trust proxy
+headers. Authentication rate limits are in memory and reset on restart.
+
+## Commands
 
 ```sh
-pnpm --filter api exec prisma migrate deploy
 pnpm --filter api dev
+pnpm --filter api test
+pnpm --filter api lint
+pnpm --filter api typecheck
+pnpm --filter api build
 ```
 
-The API prefix is `/api`; readiness is `/api/health/ready`, liveness
-`/api/health/live`. CORS uses `WEB_URL`. Startup validates configuration before
-creating the app; tests constructing AppModule do not replace a startup check.
+## Tests
 
-## Run tests
+Export `TEST_DATABASE_URL` securely for an isolated PostgreSQL database, then:
 
 ```sh
-pnpm --filter api test
-pnpm --filter api typecheck
-pnpm --filter api lint
-pnpm --filter api build
+DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter api exec prisma migrate deploy
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter api test:e2e
 ```
 
-Export `TEST_DATABASE_URL` securely first. E2E configuration refuses to load unless
-`DATABASE_URL` exactly equals it and the decoded database name contains `test`.
-Never replace the normal URL permanently. Use command-scoped overrides for test
-migrations too. Fixtures must clean up only their owned data.
+The test runner requires exact URL equality and a database name containing `test`.
+Never permanently replace the normal `DATABASE_URL` or run these against production.
 
-## Render deployment
+## Payments and recovery
 
-Use the existing free service and `render.yaml`; do not provision replacements.
-Build: frozen install, shared types build, Prisma generate, API build. Start:
-`prisma migrate deploy` then `start:prod`, as configured in the Blueprint.
-Preserve service secrets, inspect deployment status through `live`, and check
-readiness, public menu/ordering, protected-route rejection and CORS. Never probe
-malicious payloads or create test orders against production. A merge or tag alone
-is not a verified deployment.
+Checkout requires the cart owner, a UUID v4 `idempotencyKey`, reviewed integer
+`cartRevision` and `paymentProvider` (`cash` or `paymongo`). Stale carts or key reuse
+with a different payload return 409. The same request creates once (201) or replays
+(200). Owner recovery at `POST /api/customers/:customerId/cart/checkout/recover`
+accepts the same payload and returns the order or `checkoutNotCreated`.
+Never retry an unknown outcome with a new key or prune keys independently of orders.
 
-## Checkout request recovery
+PayMongo session creation happens after the order commits. Ambiguous creation
+requires provider review, not another creation attempt. Resume retrieves a known
+session or starts a never-attempted creation once. Webhooks at
+`/api/webhooks/paymongo` verify the raw-body signature, mode, amount and currency;
+duplicate settlement is idempotent. Inspect reconciliation issues for conflicts.
+Paid cancellation does not automatically refund.
 
-Checkout requires the authenticated cart owner, a UUID v4 `idempotencyKey`, the
-reviewed integer `cartRevision`, and `paymentProvider` (`cash` or `paymongo`).
-Cart mutations advance the revision; stale checkouts return 409. Refresh old tabs.
-
-`POST /api/customers/:customerId/cart/checkout` creates once (201) or replays the
-same request (200). Reusing a key with a different payload returns 409.
-`POST /api/customers/:customerId/cart/checkout/recover` accepts the same payload
-and returns the order or `checkoutNotCreated`, which closes the unused key against
-late requests. Recovery works while closed and never cancels an order or payment.
-
-Unknown browser outcomes retain their immutable IndexedDB intent. Do not retry
-with a new key. After clearing storage or switching devices, consult order history
-before ordering again. Do not prune request keys independently of retained orders.
-Deploy compatible API and storefront versions while ordering is closed.
-
-## PayMongo payment recovery
-
-Provider session creation occurs after the order transaction and is attempted
-once. An ambiguous timeout requires operator review, never another creation.
-Explicit owner-only resume retrieves a known session or launches a never-started
-attempt once; paid/expired sessions must not be offered for payment.
-
-Webhook settlement uses the raw request body and configured signing secret,
-validates mode and paid amount/currency against the pending payment, and commits
-before acknowledging success. Duplicate events preserve the winning timestamp.
-Cancelled-order or payment-detail conflicts require reconciliation. Store closure
-and disabled new checkout do not prevent valid settlement. Paid cancellation does
-not automatically refund; inspect the provider before taking manual action.
-
-## Isolated webhook verification
+For isolated signed-webhook checks:
 
 ```sh
 pnpm --filter api build
 DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter api webhook:verify --self-test
 ```
 
-The self-test uses the local isolated test database and locally signed events.
-Interactive `webhook:verify` additionally requires `cloudflared`, test-mode
-credentials, and PayMongo's official simulator. Never scan a sandbox QR using a
-real banking or wallet app. The runner owns temporary fixtures/webhooks/tunnels;
-verify their cleanup after interruption. Never repeat ambiguous session creation.
-Dashboard samples without paid amount/currency are not valid settlement evidence.
+Interactive verification also needs `cloudflared` and test-mode credentials.
+Use only the provider simulator, never a real bank or wallet transfer. Check cleanup
+of temporary fixtures, webhooks and tunnels after interruption.
 
-The deployed webhook path is `/api/webhooks/paymongo`. Preserve its matching
-service-level signing secret and mode; never replace the complete environment
-collection to change one setting. Live merchant acceptance, credentials, backup
-recovery and authorized rollout remain separate release gates.
+## Coffee photos
 
-## Coffee photo uploads
+Admin uploads accept non-animated JPEG, PNG or WebP up to 3 MB and 8 megapixels.
+The API re-encodes to WebP, stores photos in Cloudinary and references them in Neon.
+External image URLs are also supported. Render does not store uploaded files.
 
-Admins can attach JPEG, PNG or WebP photos up to 3 MB and 8 megapixels. The API
-re-encodes them as WebP and stores the Cloudinary delivery URL and public ID in
-Neon. Existing external image URLs remain supported. No uploads are stored on
-Render's filesystem.
+Photo upload follows saving coffee details. Failed uploads retain the saved coffee
+and current photo. Review uncertain uploads and superseded assets in Cloudinary
+before retrying or deleting; provider assets are not deleted automatically.
 
-Set `COFFEE_IMAGE_UPLOAD_ENABLED=true` only after securely configuring
-`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` on the API.
-Leave the flag unset or false to disable uploads without affecting the URL option.
-Never expose the secret in frontend variables or commit its value. Use the Free
-account without paid add-ons and monitor its shared storage/bandwidth allowance.
+## Deployment
 
-Photo upload is a separate operation after saving coffee details. On photo failure,
-the form retains the saved coffee ID for retry; it does not create another coffee.
-Uploads are not automatically retried. Review ambiguous or unattached assets and
-superseded photos in Cloudinary before removing them; the API does not automatically
-delete provider assets on replacement or database failure.
+Use the existing free Render service and `render.yaml`. Its build generates Prisma,
+builds shared types and compiles the API; startup applies committed migrations.
+Store secrets in Render, preserve existing values and verify the deployed commit
+and `/api/health/ready`. Liveness is `/api/health/live`.
+
+Keep ordering closed during incompatible rollouts. Verify deployments with read-only
+checks, without production test orders. Retain encrypted backups separately from
+the database and verify restores in an isolated database.
