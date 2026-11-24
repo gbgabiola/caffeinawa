@@ -18,7 +18,7 @@ interface AdminTableHeadProps {
   className?: string;
 }
 
-export function AdminTableHead({ children, className = 'border-b border-gray-200 bg-gray-50' }: AdminTableHeadProps) {
+export function AdminTableHead({ children, className = 'border-b border-cafe-border bg-cafe-cream' }: AdminTableHeadProps) {
   return <thead className={className}>{children}</thead>;
 }
 
@@ -27,6 +27,6 @@ interface AdminTableBodyProps {
   className?: string;
 }
 
-export function AdminTableBody({ children, className = 'divide-y divide-gray-100' }: AdminTableBodyProps) {
+export function AdminTableBody({ children, className = 'divide-y divide-cafe-border' }: AdminTableBodyProps) {
   return <tbody className={className}>{children}</tbody>;
 }

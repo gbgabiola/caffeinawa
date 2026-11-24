@@ -93,14 +93,14 @@ function CustomerOrders({ accessToken }: CustomerOrdersProps) {
         </p>
       ) : error ? (
         <section className="mt-6 rounded-2xl border border-cafe-border bg-cafe-paper p-6">
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-status-error">
             {error}
           </p>
 
           <button
             type="button"
             onClick={() => setRefreshCount(count => count + 1)}
-            className="mt-5 min-h-11 rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-5 min-h-11 rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Try again
           </button>
@@ -113,7 +113,7 @@ function CustomerOrders({ accessToken }: CustomerOrdersProps) {
 
           <Link
             href="/menu"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Explore the menu
           </Link>
@@ -140,7 +140,7 @@ function CustomerOrders({ accessToken }: CustomerOrdersProps) {
 
                     <span
                       className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                        order.status === 'cancelled' ? 'bg-red-50 text-red-700' : 'bg-cafe-soft text-cafe-brown'
+                        order.status === 'cancelled' ? 'bg-status-error-soft text-status-error' : 'bg-cafe-soft text-cafe-brown'
                       }`}
                     >
                       {statusLabels[order.status]}
@@ -199,7 +199,7 @@ export default function OrdersPage() {
 
           <Link
             href="/login?next=%2Forders"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Sign in
           </Link>

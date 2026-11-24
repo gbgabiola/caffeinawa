@@ -22,7 +22,7 @@ interface AccountFormProps {
 }
 
 const inputClassName =
-  'mt-2 min-h-12 w-full rounded-xl border border-cafe-border bg-white px-4 py-3 text-base text-cafe-espresso read-only:bg-cafe-cream read-only:text-cafe-muted disabled:opacity-60';
+  'mt-2 min-h-12 w-full rounded-xl border border-cafe-border bg-cafe-paper px-4 py-3 text-base text-cafe-espresso read-only:bg-cafe-cream read-only:text-cafe-muted disabled:opacity-60';
 
 function AccountForm({ customer, updateCustomer }: AccountFormProps) {
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
@@ -162,7 +162,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
         {message && (
           <p
             role="status"
-            className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm leading-6 text-green-800"
+            className="rounded-xl border border-status-success-border bg-status-success-soft px-4 py-3 text-sm leading-6 text-status-success"
           >
             {message}
           </p>
@@ -171,7 +171,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
         {error && (
           <p
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+            className="rounded-xl border border-status-error-border bg-status-error-soft px-4 py-3 text-sm leading-6 text-status-error"
           >
             {error}
           </p>
@@ -182,7 +182,7 @@ function AccountForm({ customer, updateCustomer }: AccountFormProps) {
             <button
               type="submit"
               disabled={isSaving || !hasChanges}
-              className="min-h-12 rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-12 rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save changes'}
             </button>

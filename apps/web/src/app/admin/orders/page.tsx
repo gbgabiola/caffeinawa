@@ -95,34 +95,34 @@ export default function AdminOrdersPage() {
     <main className="p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div>
-          <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+          <p className="text-sm font-medium text-cafe-muted">Caffeinawa Admin</p>
 
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Orders</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-cafe-espresso">Orders</h1>
 
-          <p className="mt-3 text-gray-600">View customer orders and manage their status.</p>
+          <p className="mt-3 text-cafe-muted">View customer orders and manage their status.</p>
         </div>
 
         {updateError && (
-          <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-4 rounded-lg border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error">
             {updateError}
           </div>
         )}
 
-        <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-8 overflow-hidden rounded-xl border border-cafe-border bg-cafe-paper shadow-sm">
           <AdminListToolbar
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search by customer name or email..."
           >
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Status</span>
               <select
                 value={statusFilter}
                 onChange={event => {
                   setStatusFilter(event.target.value as OrderStatus | '');
                   resetPage();
                 }}
-                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+                className="mt-1 rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm"
               >
                 <option value="">All statuses</option>
                 {ORDER_STATUSES.map(status => (
@@ -146,31 +146,31 @@ export default function AdminOrdersPage() {
                   <tr>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Customer
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Items
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Total
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Status
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Created
                     </th>
@@ -184,15 +184,15 @@ export default function AdminOrdersPage() {
                     return (
                       <tr key={order.id}>
                         <td className="whitespace-nowrap px-6 py-4">
-                          <p className="font-medium text-gray-900">{order.customer.name}</p>
-                          <p className="mt-1 text-sm text-gray-500">{order.customer.email}</p>
+                          <p className="font-medium text-cafe-espresso">{order.customer.name}</p>
+                          <p className="mt-1 text-sm text-cafe-muted">{order.customer.email}</p>
                         </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-cafe-muted">
                           {itemCount} {itemCount === 1 ? 'item' : 'items'}
                         </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-cafe-espresso">
                           {formatCurrency(order.total)}
                         </td>
 
@@ -201,7 +201,7 @@ export default function AdminOrdersPage() {
                             value={order.status}
                             onChange={event => void handleStatusChange(order.id, event.target.value as OrderStatus)}
                             disabled={updatingOrderId === order.id || ADMIN_ORDER_ACTIONS[order.status].length === 0}
-                            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm capitalize text-gray-700 shadow-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-md border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm capitalize text-cafe-brown shadow-sm outline-none transition focus:border-cafe-accent focus:ring-2 focus:ring-cafe-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label={`Update status for ${order.customer.name}'s order`}
                           >
                             {[order.status, ...ADMIN_ORDER_ACTIONS[order.status]].map(status => (
@@ -212,7 +212,7 @@ export default function AdminOrdersPage() {
                           </select>
                         </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-cafe-muted">
                           {formatDate(order.createdAt)}
                         </td>
                       </tr>

@@ -175,9 +175,9 @@ function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: Order
               <span
                 className={`mt-5 inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${
                   order?.status === 'cancelled'
-                    ? 'border-red-200 bg-red-50 text-red-700'
+                    ? 'border-status-error-border bg-status-error-soft text-status-error'
                     : order?.status === 'pending'
-                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                      ? 'border-status-warning-border bg-status-warning-soft text-status-warning'
                       : 'border-cafe-border bg-cafe-soft text-cafe-brown'
                 }`}
               >
@@ -215,7 +215,7 @@ function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: Order
             {paymentCheckoutUnavailable && order?.status === 'pending' && (
               <p
                 role="alert"
-                className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-950"
+                className="mt-5 rounded-xl border border-status-warning-border bg-status-warning-soft p-4 text-sm leading-7 text-status-warning"
               >
                 Your order already exists. Check the payment options below or contact the store before placing another order. This message does not confirm whether payment completed.
               </p>
@@ -232,7 +232,7 @@ function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: Order
             {error && (
               <p
                 role="alert"
-                className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700"
+                className="mt-5 rounded-xl border border-status-error-border bg-status-error-soft p-4 text-sm leading-6 text-status-error"
               >
                 {error}
               </p>
@@ -252,7 +252,7 @@ function OrderLookup({ orderId, accessToken, paymentCheckoutUnavailable }: Order
                 type="button"
                 disabled={checking}
                 onClick={refreshStatus}
-                className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:opacity-50"
+                className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-primary px-5 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover disabled:opacity-50"
               >
                 {checking ? 'Checking...' : 'Refresh order status'}
               </button>
@@ -298,7 +298,7 @@ function SuccessContent() {
 
           <Link
             href="/menu"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Back to the menu
           </Link>
@@ -325,7 +325,7 @@ function SuccessContent() {
 
           <Link
             href={signInHref}
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Sign in
           </Link>

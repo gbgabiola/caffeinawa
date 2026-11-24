@@ -316,7 +316,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
               type="button"
               disabled={submitting}
               onClick={() => void handleRecovery()}
-              className="mt-3 min-h-11 rounded-full bg-cafe-espresso px-5 text-sm text-white disabled:opacity-50"
+              className="mt-3 min-h-11 rounded-full bg-cafe-primary px-5 text-sm text-cafe-on-primary disabled:opacity-50"
             >
               Check previous checkout
             </button>
@@ -329,7 +329,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
         {error && (
           <p
             role="alert"
-            className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            className="mt-6 rounded-xl border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error"
           >
             {error}
           </p>
@@ -349,7 +349,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
             <button
               type="button"
               onClick={() => setRefreshCount(count => count + 1)}
-              className="mt-5 min-h-12 rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+              className="mt-5 min-h-12 rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
             >
               Try again
             </button>
@@ -362,7 +362,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
 
             <Link
               href="/menu"
-              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
             >
               Explore the menu
             </Link>
@@ -442,7 +442,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
                         </p>
 
                         {!item.coffee.available && (
-                          <p className="mt-2 text-sm font-medium text-red-700">Currently unavailable</p>
+                          <p className="mt-2 text-sm font-medium text-status-error">Currently unavailable</p>
                         )}
                       </div>
 
@@ -477,7 +477,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
               </div>
 
               {hasUnavailableItem && (
-                <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
+                <p role="status" className="mt-5 rounded-xl bg-status-error-soft p-3 text-sm leading-6 text-status-error">
                   Return to your cart and remove unavailable drinks before placing your order.
                 </p>
               )}
@@ -488,7 +488,7 @@ function CustomerCheckout({ customerId, accessToken }: CustomerCheckoutProps) {
                 disabled={
                   submitting || hasUnavailableItem || !canCheckout || !intentReady || pendingIntent !== null
                 }
-                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-6 flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-primary px-5 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting
                   ? selectedPaymentProvider === 'paymongo'
@@ -547,7 +547,7 @@ export default function CheckoutPage() {
 
           <Link
             href="/login?next=%2Fcheckout"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Sign in
           </Link>

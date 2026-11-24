@@ -1,0 +1,71 @@
+.toggle {
+  --segment: 2rem;
+  --thumb: 1.875rem;
+  --track-padding: 0.25rem;
+  position: relative;
+  isolation: isolate;
+  display: inline-grid;
+  grid-template-columns: repeat(2, var(--segment));
+  place-items: center;
+  flex: none;
+  min-height: 2.75rem;
+  padding: var(--track-padding);
+  border: 1px solid var(--cafe-border);
+  border-radius: 999px;
+  background: var(--cafe-paper);
+  color: var(--cafe-muted);
+  cursor: pointer;
+}
+.toggle:hover {
+  border-color: var(--cafe-accent);
+}
+.toggle::before {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: calc(var(--track-padding) + (var(--segment) - var(--thumb)) / 2);
+  width: var(--thumb);
+  height: var(--thumb);
+  border-radius: 50%;
+  background: var(--cafe-primary);
+  content: '';
+  transform: translateY(-50%);
+  transition: transform 160ms ease;
+}
+:global([data-theme='dark']) .toggle::before {
+  transform: translate(var(--segment), -50%);
+}
+.toggle svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+:global([data-theme='light']) .sun,
+:global([data-theme='dark']) .moon {
+  color: var(--cafe-on-primary);
+}
+@media (max-width: 640px) {
+  .toggle {
+    --segment: 1.5rem;
+    --thumb: 1.375rem;
+  }
+  .toggle svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toggle::before {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .toggle::before {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+  :global([data-theme='light']) .sun,
+  :global([data-theme='dark']) .moon {
+    forced-color-adjust: none;
+    color: HighlightText;
+  }
+}

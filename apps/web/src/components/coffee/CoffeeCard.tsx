@@ -189,7 +189,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
             type="button"
             disabled={updating}
             onClick={() => void handleIncrement()}
-            className="flex min-h-11 w-full items-center justify-center rounded-xl bg-cafe-espresso px-3 text-sm font-medium text-white transition-colors hover:bg-cafe-brown disabled:opacity-50"
+            className="flex min-h-11 w-full items-center justify-center rounded-xl bg-cafe-primary px-3 text-sm font-medium text-cafe-on-primary transition-colors hover:bg-cafe-primary-hover disabled:opacity-50"
           >
             {updating ? 'Adding...' : isAuthenticated ? 'Add to cart' : 'Sign In'}
           </button>
@@ -203,7 +203,7 @@ export function CoffeeCard({ coffee }: CoffeeCardProps) {
         )}
 
         {error && (
-          <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+          <p role="alert" className="mt-3 rounded-lg bg-status-error-soft px-3 py-2 text-xs leading-5 text-status-error">
             {error}
           </p>
         )}

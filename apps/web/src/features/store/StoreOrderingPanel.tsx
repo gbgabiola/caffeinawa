@@ -38,23 +38,23 @@ export default function StoreOrderingPanel() {
   }
 
   return (
-    <section aria-labelledby="ordering-control-heading" className="mt-8 rounded-xl border border-gray-200 bg-white p-6">
-      <h2 id="ordering-control-heading" className="text-lg font-semibold text-gray-900">
+    <section aria-labelledby="ordering-control-heading" className="mt-8 rounded-xl border border-cafe-border bg-cafe-paper p-6">
+      <h2 id="ordering-control-heading" className="text-lg font-semibold text-cafe-espresso">
         Store ordering
       </h2>
 
-      <p className="mt-2 text-sm leading-6 text-gray-600">
+      <p className="mt-2 text-sm leading-6 text-cafe-muted">
         Control whether customers can place new orders. Closing does not cancel existing orders or stop payment
         processing.
       </p>
 
       {ordering.isPending ? (
-        <p role="status" className="mt-4 text-sm text-gray-500">
+        <p role="status" className="mt-4 text-sm text-cafe-muted">
           Loading ordering status...
         </p>
       ) : ordering.isError ? (
         <div className="mt-4">
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-status-error">
             {ordering.error.message}
           </p>
 
@@ -62,14 +62,14 @@ export default function StoreOrderingPanel() {
             type="button"
             onClick={() => void ordering.refetch()}
             disabled={ordering.isFetching}
-            className="mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50"
+            className="mt-3 rounded-lg border border-cafe-input-border px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
             Try again
           </button>
         </div>
       ) : (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
-          <p role="status" className="text-sm font-semibold text-gray-900">
+          <p role="status" className="text-sm font-semibold text-cafe-espresso">
             {ordering.data.acceptingOrders ? 'Open — accepting new orders' : 'Closed — browsing only'}
           </p>
 
@@ -77,7 +77,7 @@ export default function StoreOrderingPanel() {
             type="button"
             onClick={() => void toggleOrdering()}
             disabled={!accessToken || mutation.isPending}
-            className="min-h-11 rounded-lg bg-gray-900 px-5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-cafe-primary px-5 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover disabled:opacity-50"
           >
             {mutation.isPending ? 'Saving...' : ordering.data.acceptingOrders ? 'Close ordering' : 'Open ordering'}
           </button>
@@ -85,7 +85,7 @@ export default function StoreOrderingPanel() {
       )}
 
       {mutation.isError && (
-        <p role="alert" className="mt-4 text-sm text-red-700">
+        <p role="alert" className="mt-4 text-sm text-status-error">
           {mutation.error.message}
         </p>
       )}

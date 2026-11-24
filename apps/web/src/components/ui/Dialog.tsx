@@ -50,19 +50,19 @@ export default function Dialog({ open, onClose, title, description, children, cl
       onClick={handleOverlayClick}
     >
       <div
-        className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+        className="w-full max-w-md rounded-xl bg-cafe-paper p-6 shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         onClick={event => event.stopPropagation()}
       >
-        <h2 id={titleId} className="text-lg font-semibold text-gray-900">
+        <h2 id={titleId} className="text-lg font-semibold text-cafe-espresso">
           {title}
         </h2>
 
         {description && (
-          <p id={descriptionId} className="mt-2 text-sm leading-6 text-gray-600">
+          <p id={descriptionId} className="mt-2 text-sm leading-6 text-cafe-muted">
             {description}
           </p>
         )}

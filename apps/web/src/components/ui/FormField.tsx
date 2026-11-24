@@ -11,12 +11,12 @@ interface FormFieldProps {
 export default function FormField({ htmlFor, label, description, error, children }: FormFieldProps) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-gray-700">
+      <label htmlFor={htmlFor} className="block text-sm font-medium text-cafe-brown">
         {label}
       </label>
 
       {description && (
-        <p id={`${htmlFor}-description`} className="mt-1 text-xs text-gray-500">
+        <p id={`${htmlFor}-description`} className="mt-1 text-xs text-cafe-muted">
           {description}
         </p>
       )}
@@ -24,7 +24,7 @@ export default function FormField({ htmlFor, label, description, error, children
       {children}
 
       {error && (
-        <p id={`${htmlFor}-error`} role="alert" className="mt-1.5 text-xs text-red-600">
+        <p id={`${htmlFor}-error`} role="alert" className="mt-1.5 text-xs text-status-error">
           {error}
         </p>
       )}

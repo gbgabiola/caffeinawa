@@ -41,3 +41,6 @@ placing another order after clearing storage or switching devices. See the
 Admin coffee forms accept a photo attachment or image URL. Upload configuration
 and limits are documented in the [API README](../api/README.md#coffee-photo-uploads).
 Cloudinary credentials belong only on the API, never in public web variables.
+
+The sun/moon switch follows the system theme by default. A visitor's manual
+light/dark choice is saved in their browser and synchronized across tabs.

@@ -37,16 +37,16 @@ function formatStatus(status: PaymentStatus): string {
 function statusClasses(status: PaymentStatus): string {
   switch (status) {
     case 'paid':
-      return 'bg-green-100 text-green-700';
+      return 'bg-status-success-soft text-status-success';
     case 'failed':
-      return 'bg-red-100 text-red-700';
+      return 'bg-status-error-soft text-status-error';
     case 'cancelled':
-      return 'bg-gray-100 text-gray-700';
+      return 'bg-cafe-soft text-cafe-brown';
     case 'expired':
-      return 'bg-orange-100 text-orange-700';
+      return 'bg-status-warning-soft text-status-warning';
     case 'pending':
     default:
-      return 'bg-amber-100 text-amber-700';
+      return 'bg-status-warning-soft text-status-warning';
   }
 }
 
@@ -108,34 +108,34 @@ export default function AdminPaymentsPage() {
     <main className="p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
         <div>
-          <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+          <p className="text-sm font-medium text-cafe-muted">Caffeinawa Admin</p>
 
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Payments</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-cafe-espresso">Payments</h1>
 
-          <p className="mt-3 text-gray-600">Monitor payment status and confirm cash payments.</p>
+          <p className="mt-3 text-cafe-muted">Monitor payment status and confirm cash payments.</p>
         </div>
 
         {updateError && (
-          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-6 rounded-lg border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error">
             {updateError}
           </div>
         )}
 
-        <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-8 overflow-hidden rounded-xl border border-cafe-border bg-cafe-paper shadow-sm">
           <AdminListToolbar
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search by customer or coffee..."
           >
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Provider</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Provider</span>
               <select
                 value={providerFilter}
                 onChange={event => {
                   setProviderFilter(event.target.value as PaymentProvider | '');
                   resetPage();
                 }}
-                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+                className="mt-1 rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm"
               >
                 <option value="">All providers</option>
                 <option value="cash">Cash</option>
@@ -143,14 +143,14 @@ export default function AdminPaymentsPage() {
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Status</span>
               <select
                 value={statusFilter}
                 onChange={event => {
                   setStatusFilter(event.target.value as PaymentStatus | '');
                   resetPage();
                 }}
-                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+                className="mt-1 rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm"
               >
                 <option value="">All statuses</option>
                 {(['pending', 'paid', 'failed', 'expired', 'cancelled'] as PaymentStatus[]).map(status => (
@@ -170,7 +170,7 @@ export default function AdminPaymentsPage() {
                   setStatusFilter('');
                   resetPage();
                 }}
-                className="self-end rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                className="self-end rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm font-medium text-cafe-brown transition hover:bg-cafe-soft focus:outline-none focus:ring-2 focus:ring-cafe-accent/25"
               >
                 Clear filters
               </button>
@@ -189,43 +189,43 @@ export default function AdminPaymentsPage() {
                   <tr>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Customer
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Order
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Payment method
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Amount
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Status
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Paid
                     </th>
                     <th
                       scope="col"
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                     >
                       Action
                     </th>
@@ -243,25 +243,25 @@ export default function AdminPaymentsPage() {
                     return (
                       <tr key={payment.id}>
                         <td className="whitespace-nowrap px-6 py-4">
-                          <p className="font-medium text-gray-900">{payment.order.customer.name}</p>
-                          <p className="mt-1 text-sm text-gray-500">{payment.order.customer.email}</p>
+                          <p className="font-medium text-cafe-espresso">{payment.order.customer.name}</p>
+                          <p className="mt-1 text-sm text-cafe-muted">{payment.order.customer.email}</p>
                         </td>
 
                         <td className="px-6 py-4">
-                          <p className="font-medium text-gray-900">
+                          <p className="font-medium text-cafe-espresso">
                             {itemCount} {itemCount === 1 ? 'item' : 'items'}
                           </p>
-                          <p className="mt-1 max-w-xs text-sm text-gray-500">{itemSummary}</p>
+                          <p className="mt-1 max-w-xs text-sm text-cafe-muted">{itemSummary}</p>
                         </td>
 
                         <td className="whitespace-nowrap px-6 py-4">
-                          <p className="font-medium text-gray-900">{formatProvider(payment.provider)}</p>
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="font-medium text-cafe-espresso">{formatProvider(payment.provider)}</p>
+                          <p className="mt-1 text-xs text-cafe-muted">
                             Created {dateFormatter.format(new Date(payment.createdAt))}
                           </p>
                         </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-cafe-espresso">
                           {currencyFormatter.format(payment.amount)}
                         </td>
 
@@ -273,7 +273,7 @@ export default function AdminPaymentsPage() {
                           </span>
                         </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-cafe-muted">
                           {payment.paidAt ? dateFormatter.format(new Date(payment.paidAt)) : '—'}
                         </td>
 
@@ -283,12 +283,12 @@ export default function AdminPaymentsPage() {
                               type="button"
                               onClick={() => void handleMarkAsPaid(payment.id)}
                               disabled={updatingPaymentId === payment.id}
-                              className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-md bg-cafe-primary px-3 py-2 text-sm font-medium text-cafe-on-primary transition hover:bg-cafe-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {updatingPaymentId === payment.id ? 'Updating...' : 'Mark as paid'}
                             </button>
                           ) : (
-                            <span className="text-sm text-gray-400">—</span>
+                            <span className="text-sm text-cafe-muted">—</span>
                           )}
                         </td>
                       </tr>

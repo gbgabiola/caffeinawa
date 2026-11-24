@@ -37,7 +37,7 @@ export default function ErrorPage({ reset }: ErrorPageProps) {
           <button
             type="button"
             onClick={reset}
-            className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Try again
           </button>

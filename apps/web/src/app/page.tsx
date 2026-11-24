@@ -62,7 +62,7 @@ export default function HomePage() {
             <div className="mt-8 flex flex-col gap-3 min-[400px]:flex-row">
               <Link
                 href="/menu"
-                className="inline-flex min-h-12 items-center justify-center gap-4 rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white transition-colors hover:bg-cafe-brown"
+                className="inline-flex min-h-12 items-center justify-center gap-4 rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary transition-colors hover:bg-cafe-primary-hover"
               >
                 Explore the menu
                 <span aria-hidden="true">↗</span>
@@ -151,7 +151,7 @@ export default function HomePage() {
       </section>
 
       <section aria-labelledby="menu-invitation-heading" className="mx-auto max-w-7xl px-5 py-12 sm:px-8 sm:py-16">
-        <div className="flex flex-col gap-7 rounded-3xl bg-cafe-espresso px-6 py-10 text-cafe-cream sm:px-10 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-7 rounded-3xl bg-cafe-primary px-6 py-10 text-cafe-cream sm:px-10 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cafe-cream/75">
               A moment worth making

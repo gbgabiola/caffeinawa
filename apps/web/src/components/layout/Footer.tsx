@@ -14,7 +14,7 @@ export function Footer() {
                 width={960}
                 height={960}
                 unoptimized
-                className="h-40 w-40 object-contain"
+                className="brand-logo h-40 w-40 object-contain"
               />
             </Link>
             <p className="mt-3 max-w-sm text-sm leading-6 text-cafe-muted">
