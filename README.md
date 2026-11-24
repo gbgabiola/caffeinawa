@@ -1,29 +1,46 @@
 # Caffeinawa
 
-Coffee-commerce monorepo with a static storefront, authenticated customer checkout,
-admin operations, cash payments and gated PayMongo integration.
+[![README views](https://hits.sh/github.com/gbgabiola/caffeinawa.svg?label=README%20views&color=a4521c)](https://hits.sh/github.com/gbgabiola/caffeinawa/)
 
-## Workspace
+Coffee ordering with customer accounts, a cart, order history and admin tools.
+Supports cash payments, optional PayMongo checkout and Cloudinary coffee photos.
 
-- `apps/api`: NestJS, Prisma/PostgreSQL; [API setup and operations](apps/api/README.md).
-- `apps/web`: Next.js App Router, React, TanStack Query; [storefront setup](apps/web/README.md).
-- `packages/types`: shared runtime constants and API contracts, built to `dist`.
+[Visit Caffeinawa](https://caffeinawa.pages.dev/)
 
-## Development
+## Setup
 
-Use Node.js 24 and pnpm 12.4.1. From the repository root:
+Use Node.js 24, pnpm 12.4.1 and PostgreSQL 17. From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
+cp -i apps/api/.env.example apps/api/.env
+cp -i apps/web/.env.example apps/web/.env.local
+```
+
+Copy templates only on first setup; keep existing local configuration.
+Set `DATABASE_URL`, `JWT_SECRET` and `WEB_URL` in `apps/api/.env`.
+Set `NEXT_PUBLIC_API_URL` in `apps/web/.env.local`, including `/api`.
+See [API configuration](apps/api/README.md#environment) and
+[web configuration](apps/web/README.md#environment) for optional integrations.
+Never commit local environment files or credentials.
+
+```sh
 pnpm --filter @caffeinawa/types build
 pnpm --filter api exec prisma generate
+pnpm --filter api exec prisma migrate deploy
 pnpm dev
 ```
 
-Configure local environment values securely as described in the application
-READMEs before starting. Never commit secrets or print connection strings.
+Review migrations and confirm the target development database before applying.
+The storefront runs on `http://localhost:3000`; the API on `http://localhost:3001/api`.
 
-## Quality gates
+## Workspace
+
+- [apps/web](apps/web/README.md): Next.js/React storefront and admin screens.
+- [apps/api](apps/api/README.md): NestJS API, Prisma and PostgreSQL.
+- `packages/types`: shared API types and runtime constants.
+
+## Checks
 
 ```sh
 pnpm version:check
@@ -32,36 +49,17 @@ pnpm test
 pnpm build
 pnpm typecheck
 STATIC_EXPORT=true pnpm --filter web build
-DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter api test:e2e
 ```
 
-Database tests require an existing isolated test database; see the API README.
-CI additionally applies migrations only to its isolated PostgreSQL test service
-and verifies signed webhook handling. Passing tests alone does not establish
-production readiness.
+Database-backed tests need a separate test database; follow the
+[API test instructions](apps/api/README.md#tests).
 
-## Hosting and release boundaries
+## Hosting
 
-The storefront is exported to Cloudflare Pages; the API uses the existing free
-Render service and Neon PostgreSQL. Do not introduce paid services or upgrades.
-Render deploys are manual; its start command applies committed migrations before
-starting the API. Verify the deployed commit and `/api/health/ready` after rollout.
-Cloudflare production builds follow `main`. Preserve existing environment secrets.
+Cloudflare Pages hosts the static storefront; Render hosts the API with Neon
+PostgreSQL. Cloudinary stores uploaded photos. Keep all services on their free
+plans. API readiness: `/api/health/ready`.
 
-Ordering remains closed and new PayMongo checkout disabled until an explicitly
-approved acceptance rollout. Live merchant readiness, backups/restore verification
-and broader dependency advisory triage remain release gates. Paid cancellation
-does not automatically refund. Do not create production orders for smoke tests.
+## License
 
-## Contributing and versioning
-
-Use a focused short-lived branch from current `main`; preserve unrelated work.
-Validate, commit with Conventional Commits, push a PR, wait for CI, merge, and
-remove the merged branch after verifying its head. Do not force-push or bypass
-checks. A permanent `develop` branch is unnecessary.
-
-The root and private workspace packages share one Semantic Versioning version.
-Run `pnpm version:check`. Prepare version changes in a release PR; after merged
-CI passes, create and push an annotated tag for that exact commit. Never move an
-existing tag. Git history and PRs hold change history; READMEs describe current use.
-A tag does not certify deployment or authorize live payment activation.
+[MIT](LICENSE).
