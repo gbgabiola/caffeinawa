@@ -39,7 +39,7 @@ const EMPTY_COFFEE_FORM: CoffeeFormState = {
   imageUrl: '',
 };
 const FORM_CONTROL_CLASS_NAME =
-  'mt-2 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200';
+  'mt-2 w-full rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm outline-none placeholder:text-cafe-muted focus:border-cafe-accent focus:ring-2 focus:ring-cafe-accent/25';
 
 export default function AdminCoffeesPage() {
   const { accessToken } = useAuth();
@@ -232,18 +232,18 @@ export default function AdminCoffeesPage() {
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+            <p className="text-sm font-medium text-cafe-muted">Caffeinawa Admin</p>
 
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Coffee</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-cafe-espresso">Coffee</h1>
 
-            <p className="mt-3 text-gray-600">Create, edit, and manage the coffee menu.</p>
+            <p className="mt-3 text-cafe-muted">Create, edit, and manage the coffee menu.</p>
           </div>
 
           {!isCreating && !editingCoffeeId && (
             <button
               type="button"
               onClick={startCreating}
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700"
+              className="rounded-lg bg-cafe-primary px-4 py-2.5 text-sm font-medium text-cafe-on-primary transition hover:bg-cafe-primary-hover"
             >
               Add Coffee
             </button>
@@ -251,26 +251,26 @@ export default function AdminCoffeesPage() {
         </div>
 
         {saveSuccess && (
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <div className="mt-6 rounded-lg border border-status-success-border bg-status-success-soft px-4 py-3 text-sm text-status-success">
             {saveSuccess}
           </div>
         )}
 
         {saveError && (
-          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-6 rounded-lg border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error">
             {saveError}
           </div>
         )}
 
         {(isCreating || editingCoffeeId) && (
-          <section className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <section className="mt-8 rounded-xl border border-cafe-border bg-cafe-paper p-6 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-cafe-espresso">
                   {editingCoffeeId ? 'Edit Coffee' : 'Add Coffee'}
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-cafe-muted">
                   {editingCoffeeId ? 'Update the selected coffee.' : 'Add a new coffee to the menu.'}
                 </p>
               </div>
@@ -375,10 +375,10 @@ export default function AdminCoffeesPage() {
                       available: event.target.checked,
                     }))
                   }
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-cafe-input-border"
                 />
 
-                <span className="text-sm font-medium text-gray-700">Available for customers</span>
+                <span className="text-sm font-medium text-cafe-brown">Available for customers</span>
               </label>
             </div>
 
@@ -387,7 +387,7 @@ export default function AdminCoffeesPage() {
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={isSaving || (Boolean(editingCoffeeId) && !hasChanges)}
-                className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-cafe-primary px-4 py-2.5 text-sm font-medium text-cafe-on-primary transition hover:bg-cafe-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? 'Saving...' : editingCoffeeId ? 'Save Changes' : 'Create Coffee'}
               </button>
@@ -396,7 +396,7 @@ export default function AdminCoffeesPage() {
                 type="button"
                 onClick={resetForm}
                 disabled={isSaving}
-                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-cafe-input-border px-4 py-2.5 text-sm font-medium text-cafe-brown transition hover:bg-cafe-cream disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -404,21 +404,21 @@ export default function AdminCoffeesPage() {
           </section>
         )}
 
-        <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-8 overflow-hidden rounded-xl border border-cafe-border bg-cafe-paper shadow-sm">
           <AdminListToolbar
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search by coffee name or description..."
           >
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Category</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Category</span>
               <select
                 value={categoryFilter}
                 onChange={event => {
                   setCategoryFilter(event.target.value as CoffeeCategory | '');
                   resetPage();
                 }}
-                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+                className="mt-1 rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm"
               >
                 <option value="">All categories</option>
                 {COFFEE_CATEGORIES.map(category => (
@@ -429,14 +429,14 @@ export default function AdminCoffeesPage() {
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Availability</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Availability</span>
               <select
                 value={availableFilter}
                 onChange={event => {
                   setAvailableFilter(event.target.value);
                   resetPage();
                 }}
-                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+                className="mt-1 rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm"
               >
                 <option value="">All</option>
                 <option value="true">Available</option>
@@ -455,11 +455,11 @@ export default function AdminCoffeesPage() {
               <AdminTable>
                 <AdminTableHead>
                   <tr>
-                    <th className="px-6 py-3 font-medium text-gray-600">Name</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Category</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Price</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Availability</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Actions</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Name</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Category</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Price</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Availability</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Actions</th>
                   </tr>
                 </AdminTableHead>
 
@@ -468,26 +468,26 @@ export default function AdminCoffeesPage() {
                     <tr key={coffee.id}>
                       <td className="px-6 py-4 align-top">
                         <div>
-                          <p className="font-medium text-gray-900">{coffee.name}</p>
+                          <p className="font-medium text-cafe-espresso">{coffee.name}</p>
 
-                          <p className="mt-1 max-w-md text-xs text-gray-500">{coffee.description}</p>
+                          <p className="mt-1 max-w-md text-xs text-cafe-muted">{coffee.description}</p>
                         </div>
                       </td>
 
                       <td className="px-6 py-4 align-top">
-                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                        <span className="rounded-full bg-cafe-soft px-2.5 py-1 text-xs font-medium text-cafe-brown">
                           {coffee.category}
                         </span>
                       </td>
 
-                      <td className="px-6 py-4 align-top font-medium text-gray-900">₱{coffee.price.toFixed(2)}</td>
+                      <td className="px-6 py-4 align-top font-medium text-cafe-espresso">₱{coffee.price.toFixed(2)}</td>
 
                       <td className="px-6 py-4 align-top">
                         <span
                           className={
                             coffee.available
-                              ? 'rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700'
-                              : 'rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600'
+                              ? 'rounded-full bg-status-success-soft px-2.5 py-1 text-xs font-medium text-status-success'
+                              : 'rounded-full bg-cafe-soft px-2.5 py-1 text-xs font-medium text-cafe-muted'
                           }
                         >
                           {coffee.available ? 'Available' : 'Unavailable'}
@@ -499,7 +499,7 @@ export default function AdminCoffeesPage() {
                           <button
                             type="button"
                             onClick={() => startEditing(coffee)}
-                            className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                            className="rounded-lg border border-cafe-input-border px-3 py-2 text-xs font-medium text-cafe-brown transition hover:bg-cafe-cream"
                           >
                             Edit
                           </button>
@@ -508,7 +508,7 @@ export default function AdminCoffeesPage() {
                             type="button"
                             onClick={() => requestDelete(coffee)}
                             disabled={deletingCoffeeId === coffee.id}
-                            className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-lg border border-status-error-border px-3 py-2 text-xs font-medium text-status-error transition hover:bg-status-error-soft disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {deletingCoffeeId === coffee.id ? 'Deleting...' : 'Delete'}
                           </button>
@@ -546,7 +546,7 @@ export default function AdminCoffeesPage() {
               type="button"
               onClick={() => setCoffeePendingDeletion(null)}
               disabled={Boolean(deletingCoffeeId)}
-              className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-cafe-input-border px-4 py-2.5 text-sm font-medium text-cafe-brown transition hover:bg-cafe-cream disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>

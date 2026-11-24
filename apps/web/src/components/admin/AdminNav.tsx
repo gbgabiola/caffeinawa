@@ -19,10 +19,10 @@ export default function AdminNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-full shrink-0 border-b border-gray-200 bg-white lg:min-h-[calc(100vh-65px)] lg:w-64 lg:border-b-0 lg:border-r">
+    <aside className="w-full shrink-0 border-b border-cafe-border bg-cafe-paper lg:min-h-[calc(100vh-65px)] lg:w-64 lg:border-b-0 lg:border-r">
       <div className="p-4 lg:sticky lg:top-0">
         <div className="mb-4 px-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Administration</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-cafe-muted">Administration</p>
         </div>
 
         <nav aria-label="Admin navigation" className="flex gap-1 overflow-x-auto lg:flex-col">
@@ -44,7 +44,7 @@ export default function AdminNav() {
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                  isActive ? 'bg-cafe-primary text-cafe-on-primary' : 'text-cafe-brown hover:bg-cafe-soft'
                 }`}
               >
                 {item.label}

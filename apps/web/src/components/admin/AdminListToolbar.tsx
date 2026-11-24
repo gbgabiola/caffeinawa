@@ -13,15 +13,15 @@ export default function AdminListToolbar({
   children,
 }: AdminListToolbarProps) {
   return (
-    <div className="flex flex-col gap-3 border-b border-gray-200 bg-gray-50 p-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex flex-col gap-3 border-b border-cafe-border bg-cafe-cream p-4 sm:flex-row sm:items-end sm:justify-between">
       <label className="block min-w-0 flex-1 sm:max-w-md">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Search</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Search</span>
         <input
           type="search"
           value={search}
           onChange={event => onSearchChange(event.target.value)}
           placeholder={searchPlaceholder}
-          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
+          className="mt-1 w-full rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm outline-none focus:border-cafe-accent focus:ring-2 focus:ring-cafe-accent/25"
         />
       </label>
       {children && <div className="flex flex-wrap gap-3">{children}</div>}

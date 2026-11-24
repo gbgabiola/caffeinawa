@@ -105,26 +105,26 @@ export default function AdminCustomersPage() {
     <div className="px-6 py-8 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div>
-          <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+          <p className="text-sm font-medium text-cafe-muted">Caffeinawa Admin</p>
 
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Customers</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-cafe-espresso">Customers</h1>
 
-          <p className="mt-3 text-gray-600">View and manage registered Caffeinawa customers.</p>
+          <p className="mt-3 text-cafe-muted">View and manage registered Caffeinawa customers.</p>
         </div>
 
         {saveSuccess && (
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <div className="mt-6 rounded-lg border border-status-success-border bg-status-success-soft px-4 py-3 text-sm text-status-success">
             {saveSuccess}
           </div>
         )}
 
         {saveError && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mt-6 rounded-lg border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error">
             {saveError}
           </div>
         )}
 
-        <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-8 overflow-hidden rounded-xl border border-cafe-border bg-cafe-paper shadow-sm">
           <AdminListToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search by name or email..." />
           <AdminListState
             status={fetchStatus}
@@ -137,10 +137,10 @@ export default function AdminCustomersPage() {
               <AdminTable>
                 <AdminTableHead>
                   <tr>
-                    <th className="px-6 py-3 font-medium text-gray-600">Name</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Email</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Role</th>
-                    <th className="px-6 py-3 font-medium text-gray-600">Actions</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Name</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Email</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Role</th>
+                    <th className="px-6 py-3 font-medium text-cafe-muted">Actions</th>
                   </tr>
                 </AdminTableHead>
 
@@ -161,11 +161,11 @@ export default function AdminCustomersPage() {
                                   name: event.target.value,
                                 }))
                               }
-                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                              className="w-full rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm outline-none placeholder:text-cafe-muted focus:border-cafe-accent focus:ring-2 focus:ring-cafe-accent/25"
                               aria-label="Customer name"
                             />
                           ) : (
-                            <span className="font-medium text-gray-900">{customer.name}</span>
+                            <span className="font-medium text-cafe-espresso">{customer.name}</span>
                           )}
                         </td>
 
@@ -180,16 +180,16 @@ export default function AdminCustomersPage() {
                                   email: event.target.value,
                                 }))
                               }
-                              className="w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-700 focus:ring-2 focus:ring-gray-200"
+                              className="w-full rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm outline-none placeholder:text-cafe-muted focus:border-cafe-accent focus:ring-2 focus:ring-cafe-accent/25"
                               aria-label="Customer email"
                             />
                           ) : (
-                            <span className="text-gray-600">{customer.email}</span>
+                            <span className="text-cafe-muted">{customer.email}</span>
                           )}
                         </td>
 
                         <td className="px-6 py-4 align-top">
-                          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                          <span className="rounded-full bg-cafe-soft px-2.5 py-1 text-xs font-medium text-cafe-brown">
                             {customer.role}
                           </span>
                         </td>
@@ -201,7 +201,7 @@ export default function AdminCustomersPage() {
                                 type="button"
                                 onClick={() => void handleSave()}
                                 disabled={isSaving || !hasChanges}
-                                className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-lg bg-cafe-primary px-3 py-2 text-xs font-medium text-cafe-on-primary transition hover:bg-cafe-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {isSaving ? 'Saving...' : 'Save'}
                               </button>
@@ -210,7 +210,7 @@ export default function AdminCustomersPage() {
                                 type="button"
                                 onClick={cancelEditing}
                                 disabled={isSaving}
-                                className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-lg border border-cafe-input-border px-3 py-2 text-xs font-medium text-cafe-brown transition hover:bg-cafe-cream disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 Cancel
                               </button>
@@ -219,7 +219,7 @@ export default function AdminCustomersPage() {
                             <button
                               type="button"
                               onClick={() => startEditing(customer)}
-                              className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                              className="rounded-lg border border-cafe-input-border px-3 py-2 text-xs font-medium text-cafe-brown transition hover:bg-cafe-cream"
                             >
                               Edit
                             </button>

@@ -12,7 +12,7 @@ export default function AuthShell({ eyebrow, title, description, children }: Aut
   return (
     <main className="flex flex-1 items-center justify-center bg-cafe-cream px-5 py-10 text-cafe-espresso sm:px-8 sm:py-16">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-cafe-border bg-cafe-paper lg:grid-cols-[0.9fr_1fr]">
-        <aside className="hidden flex-col justify-between bg-cafe-espresso p-10 text-cafe-cream lg:flex">
+        <aside className="hidden flex-col justify-between bg-cafe-primary p-10 text-cafe-cream lg:flex">
           <Link href="/" className="w-fit font-display text-3xl font-bold tracking-[-0.06em]">
             Caffeinawa
           </Link>

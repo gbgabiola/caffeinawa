@@ -10,9 +10,9 @@ export default function SessionNotice() {
   }
 
   return (
-    <div className="border-b border-amber-200 bg-amber-50">
+    <div className="border-b border-status-warning-border bg-status-warning-soft">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <p role="alert" className="text-sm leading-6 text-amber-950">
+        <p role="alert" className="text-sm leading-6 text-status-warning">
           {sessionError}
         </p>
 
@@ -20,7 +20,7 @@ export default function SessionNotice() {
           <button
             type="button"
             onClick={retrySession}
-            className="min-h-11 rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="min-h-11 rounded-full bg-cafe-primary px-5 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Try again
           </button>
@@ -28,7 +28,7 @@ export default function SessionNotice() {
           <button
             type="button"
             onClick={logout}
-            className="min-h-11 rounded-full border border-amber-300 px-5 text-sm font-medium text-amber-950 hover:bg-amber-100"
+            className="min-h-11 rounded-full border border-status-warning-border px-5 text-sm font-medium text-status-warning hover:bg-status-warning-soft"
           >
             Sign out
           </button>

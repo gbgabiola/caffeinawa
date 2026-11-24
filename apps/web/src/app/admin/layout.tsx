@@ -28,14 +28,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   if (isLoading || !customer || !isAdmin) {
     return (
       <main className="flex flex-1 items-center justify-center px-6 py-16">
-        <p className="text-sm text-gray-600">Checking admin access...</p>
+        <p className="text-sm text-cafe-muted">Checking admin access...</p>
       </main>
     );
   }
 
   return (
     <QueryProvider>
-      <div className="flex flex-1 flex-col bg-gray-50 lg:flex-row">
+      <div className="flex flex-1 flex-col bg-cafe-cream lg:flex-row">
         <AdminNav />
         <section className="min-w-0 flex-1">{children}</section>
       </div>

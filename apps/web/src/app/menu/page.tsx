@@ -150,7 +150,7 @@ function MenuContent() {
               onClick={() => setCategory(item.value)}
               className={`min-h-11 shrink-0 rounded-full border px-5 text-sm font-medium transition-colors ${
                 category === item.value
-                  ? 'border-cafe-accent bg-cafe-accent text-white'
+                  ? 'border-cafe-accent bg-cafe-accent text-cafe-on-primary'
                   : 'border-cafe-border bg-transparent text-cafe-brown hover:border-cafe-accent hover:bg-cafe-paper'
               }`}
             >
@@ -167,10 +167,10 @@ function MenuContent() {
             Brewing up the menu...
           </div>
         ) : menuQuery.isError ? (
-          <div className="mt-6 rounded-2xl border border-red-200 bg-cafe-paper p-8">
+          <div className="mt-6 rounded-2xl border border-status-error-border bg-cafe-paper p-8">
             <h3 className="font-display text-2xl">We couldn&apos;t load the menu</h3>
 
-            <p role="alert" className="mt-3 text-sm text-red-700">
+            <p role="alert" className="mt-3 text-sm text-status-error">
               {menuQuery.error.message}
             </p>
 
@@ -178,7 +178,7 @@ function MenuContent() {
               type="button"
               disabled={menuQuery.isFetching}
               onClick={() => void menuQuery.refetch()}
-              className="mt-5 min-h-11 rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:opacity-50"
+              className="mt-5 min-h-11 rounded-full bg-cafe-primary px-5 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover disabled:opacity-50"
             >
               {menuQuery.isFetching ? 'Trying again...' : 'Try again'}
             </button>

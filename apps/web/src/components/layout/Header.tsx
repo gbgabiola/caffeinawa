@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 
+import { ThemeSwitch } from '@/components/theme/ThemeSwitch';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 export function Header() {
@@ -65,7 +66,7 @@ export function Header() {
             height={960}
             unoptimized
             loading="eager"
-            className="h-16 w-16 object-contain sm:h-20 sm:w-20"
+            className="brand-logo h-16 w-16 object-contain sm:h-20 sm:w-20"
           />
         </Link>
 
@@ -102,11 +103,12 @@ export function Header() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <ThemeSwitch />
           {hasSession && (
             <Link
               href="/cart"
               onClick={closeMobileMenu}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cafe-espresso px-4 text-sm font-medium text-white transition-colors hover:bg-cafe-brown"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cafe-primary px-4 text-sm font-medium text-cafe-on-primary transition-colors hover:bg-cafe-primary-hover"
             >
               <svg
                 aria-hidden="true"

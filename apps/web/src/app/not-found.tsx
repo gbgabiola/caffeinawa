@@ -33,7 +33,7 @@ export default function NotFoundPage() {
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/menu"
-            className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Explore the menu
           </Link>

@@ -22,7 +22,7 @@ export default function AdminListState({
   if (status === 'idle' || status === 'loading') {
     return (
       <div className="p-6">
-        <p className="text-sm text-gray-600">{loadingMessage}</p>
+        <p className="text-sm text-cafe-muted">{loadingMessage}</p>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export default function AdminListState({
   if (status === 'error') {
     return (
       <div className="p-6">
-        <p role="alert" className="text-sm font-medium text-red-600">
+        <p role="alert" className="text-sm font-medium text-status-error">
           {error?.message ?? 'Unable to load data.'}
         </p>
       </div>
@@ -40,7 +40,7 @@ export default function AdminListState({
   if (isEmpty) {
     return (
       <div className="p-6">
-        <p className="text-sm text-gray-600">{emptyMessage}</p>
+        <p className="text-sm text-cafe-muted">{emptyMessage}</p>
       </div>
     );
   }

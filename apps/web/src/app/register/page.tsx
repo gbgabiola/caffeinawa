@@ -13,7 +13,7 @@ import { getSafeReturnPath } from '@/lib/auth-redirect';
 type FormSubmitHandler = NonNullable<ComponentProps<'form'>['onSubmit']>;
 
 const inputClassName =
-  'mt-2 min-h-12 w-full rounded-xl border border-cafe-border bg-white px-4 py-3 text-base text-cafe-espresso placeholder:text-cafe-muted';
+  'mt-2 min-h-12 w-full rounded-xl border border-cafe-border bg-cafe-paper px-4 py-3 text-base text-cafe-espresso placeholder:text-cafe-muted';
 
 function SessionLoading() {
   return (
@@ -163,7 +163,7 @@ function RegisterContent() {
         {error && (
           <p
             role="alert"
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+            className="rounded-xl border border-status-error-border bg-status-error-soft px-4 py-3 text-sm leading-6 text-status-error"
           >
             {error}
           </p>
@@ -172,7 +172,7 @@ function RegisterContent() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-espresso px-5 text-sm font-semibold text-white hover:bg-cafe-brown disabled:cursor-wait disabled:opacity-50"
+          className="flex min-h-12 w-full items-center justify-center rounded-full bg-cafe-primary px-5 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover disabled:cursor-wait disabled:opacity-50"
         >
           {isSubmitting ? 'Creating account...' : 'Create account'}
         </button>

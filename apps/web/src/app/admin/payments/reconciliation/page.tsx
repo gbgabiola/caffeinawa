@@ -57,12 +57,12 @@ function IssueDetails({ issue }: { issue: PaymentReconciliationIssue }) {
   ];
 
   return (
-    <dl className="grid gap-4 rounded-lg bg-gray-50 p-4 sm:grid-cols-2">
+    <dl className="grid gap-4 rounded-lg bg-cafe-cream p-4 sm:grid-cols-2">
       {details.map(([label, value]) => (
         <div key={label}>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">{label}</dt>
 
-          <dd className="mt-1 break-all font-mono text-xs text-gray-800">{value || '—'}</dd>
+          <dd className="mt-1 break-all font-mono text-xs text-cafe-espresso">{value || '—'}</dd>
         </div>
       ))}
     </dl>
@@ -161,47 +161,47 @@ export default function AdminPaymentReconciliationPage() {
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-gray-500">Caffeinawa Admin</p>
+            <p className="text-sm font-medium text-cafe-muted">Caffeinawa Admin</p>
 
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">Payment Reconciliation</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-cafe-espresso">Payment Reconciliation</h1>
 
-            <p className="mt-3 max-w-2xl text-gray-600">
+            <p className="mt-3 max-w-2xl text-cafe-muted">
               Investigate rejected PayMongo settlement events and track which issues have been reviewed.
             </p>
           </div>
 
           <Link
             href="/admin/payments"
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            className="rounded-lg border border-cafe-input-border bg-cafe-paper px-4 py-2 text-sm font-medium text-cafe-brown transition hover:bg-cafe-cream"
           >
             Back to payments
           </Link>
         </div>
 
-        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">Open reconciliation issues</p>
+        <div className="mt-8 rounded-xl border border-cafe-border bg-cafe-paper p-6 shadow-sm">
+          <p className="text-sm font-medium text-cafe-muted">Open reconciliation issues</p>
 
-          <p aria-live="polite" className="mt-2 text-3xl font-semibold text-gray-900">
+          <p aria-live="polite" className="mt-2 text-3xl font-semibold text-cafe-espresso">
             {openCountQuery.isPending ? '—' : openCountQuery.isError ? 'Unavailable' : openCountQuery.data}
           </p>
 
-          <p className="mt-2 text-sm text-gray-500">All open issues, regardless of the filters below.</p>
+          <p className="mt-2 text-sm text-cafe-muted">All open issues, regardless of the filters below.</p>
         </div>
 
         {actionError && (
-          <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-6 rounded-lg border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error">
             {actionError}
           </div>
         )}
 
-        <div className="mt-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="mt-8 overflow-hidden rounded-xl border border-cafe-border bg-cafe-paper shadow-sm">
           <AdminListToolbar
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search event, session, payment or order ID..."
           >
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cafe-muted">Status</span>
 
               <select
                 value={statusFilter}
@@ -209,7 +209,7 @@ export default function AdminPaymentReconciliationPage() {
                   setStatusFilter(event.target.value as PaymentIssueStatus | '');
                   resetPage();
                 }}
-                className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm"
+                className="mt-1 rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm text-cafe-espresso shadow-sm"
               >
                 <option value="">All statuses</option>
                 <option value="OPEN">Open</option>
@@ -225,7 +225,7 @@ export default function AdminPaymentReconciliationPage() {
                   setStatusFilter('OPEN');
                   resetPage();
                 }}
-                className="self-end rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                className="self-end rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm font-medium text-cafe-brown transition hover:bg-cafe-soft"
               >
                 Clear filters
               </button>
@@ -239,7 +239,7 @@ export default function AdminPaymentReconciliationPage() {
                 });
               }}
               disabled={isFetching}
-              className="self-end rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+              className="self-end rounded-lg border border-cafe-input-border bg-cafe-paper px-3 py-2 text-sm font-medium text-cafe-brown disabled:opacity-50"
             >
               Refresh
             </button>
@@ -260,7 +260,7 @@ export default function AdminPaymentReconciliationPage() {
                       <th
                         key={label}
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
+                        className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-cafe-muted"
                       >
                         {label}
                       </th>
@@ -274,18 +274,18 @@ export default function AdminPaymentReconciliationPage() {
 
                     return (
                       <tr key={issue.id} className="align-top">
-                        <td className="px-6 py-4 text-sm text-gray-600">{formatDate(issue.recordedAt)}</td>
+                        <td className="px-6 py-4 text-sm text-cafe-muted">{formatDate(issue.recordedAt)}</td>
 
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{REASON_LABELS[issue.reason]}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-cafe-espresso">{REASON_LABELS[issue.reason]}</td>
 
                         <td className="px-6 py-4">
-                          <span className="break-all font-mono text-xs text-gray-600">{issue.checkoutSessionId}</span>
+                          <span className="break-all font-mono text-xs text-cafe-muted">{issue.checkoutSessionId}</span>
                         </td>
 
                         <td className="px-6 py-4">
                           <span
                             className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                              issue.status === 'OPEN' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                              issue.status === 'OPEN' ? 'bg-status-warning-soft text-status-warning' : 'bg-status-success-soft text-status-success'
                             }`}
                           >
                             {issue.status === 'OPEN' ? 'Open' : 'Reviewed'}
@@ -298,7 +298,7 @@ export default function AdminPaymentReconciliationPage() {
                               type="button"
                               aria-expanded={expanded}
                               onClick={() => setExpandedIssueId(expanded ? null : issue.id)}
-                              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                              className="rounded-md border border-cafe-input-border px-3 py-1.5 text-xs font-medium text-cafe-brown hover:bg-cafe-cream"
                             >
                               {expanded ? 'Hide details' : 'View details'}
                             </button>
@@ -308,7 +308,7 @@ export default function AdminPaymentReconciliationPage() {
                                 type="button"
                                 disabled={reviewingIssueId !== null}
                                 onClick={() => void handleMarkReviewed(issue)}
-                                className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+                                className="rounded-md bg-cafe-primary px-3 py-1.5 text-xs font-medium text-cafe-on-primary hover:bg-cafe-primary-hover disabled:opacity-50"
                               >
                                 {reviewingIssueId === issue.id ? 'Updating...' : 'Mark Reviewed'}
                               </button>
@@ -338,7 +338,7 @@ export default function AdminPaymentReconciliationPage() {
           </AdminListState>
         </div>
 
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="mt-4 text-sm text-cafe-muted">
           Marking an issue as reviewed acknowledges the record. It does not confirm a refund or change payment status.
         </p>
       </div>

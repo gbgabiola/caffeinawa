@@ -71,7 +71,7 @@ export default function PaymentRecovery({ orderId, accessToken }: { orderId: str
     >
       {options?.message && <p role="status">{options.message}</p>}
       {error && (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-status-error">
           {error}
         </p>
       )}
@@ -80,7 +80,7 @@ export default function PaymentRecovery({ orderId, accessToken }: { orderId: str
           type="button"
           disabled={busy}
           onClick={() => void resume()}
-          className="mt-3 min-h-11 rounded-full bg-cafe-espresso px-5 font-semibold text-white disabled:opacity-50"
+          className="mt-3 min-h-11 rounded-full bg-cafe-primary px-5 font-semibold text-cafe-on-primary disabled:opacity-50"
         >
           {busy ? 'Opening payment checkout...' : 'Continue payment'}
         </button>

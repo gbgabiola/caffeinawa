@@ -36,7 +36,7 @@ function CancelledContent() {
 
               <Link
                 href={`/checkout/success?orderId=${encodeURIComponent(orderId)}`}
-                className="mt-6 flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+                className="mt-6 flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
               >
                 Check order status
               </Link>

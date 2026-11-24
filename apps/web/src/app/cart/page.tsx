@@ -135,7 +135,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
         </div>
 
         {error && (
-          <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="mt-6 rounded-xl border border-status-error-border bg-status-error-soft px-4 py-3 text-sm text-status-error">
             {error}
           </p>
         )}
@@ -154,7 +154,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
             <button
               type="button"
               onClick={() => setRefreshCount(count => count + 1)}
-              className="mt-5 min-h-12 rounded-full bg-cafe-espresso px-6 text-sm font-semibold text-white hover:bg-cafe-brown"
+              className="mt-5 min-h-12 rounded-full bg-cafe-primary px-6 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
             >
               Try again
             </button>
@@ -173,7 +173,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
 
             <Link
               href="/menu"
-              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+              className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
             >
               Explore the menu
             </Link>
@@ -202,7 +202,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                         )}
 
                         {!item.coffee.available && (
-                          <p className="mt-3 text-sm font-medium text-red-700">Currently unavailable</p>
+                          <p className="mt-3 text-sm font-medium text-status-error">Currently unavailable</p>
                         )}
                       </div>
 
@@ -247,7 +247,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                         type="button"
                         disabled={isBusy}
                         onClick={() => void changeQuantity(item.id, 0)}
-                        className="min-h-11 text-sm text-cafe-muted underline underline-offset-4 hover:text-red-700 disabled:opacity-40"
+                        className="min-h-11 text-sm text-cafe-muted underline underline-offset-4 hover:text-status-error disabled:opacity-40"
                       >
                         Remove
                       </button>
@@ -276,13 +276,13 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
               </div>
 
               {hasInvalidQuantity && (
-                <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
+                <p role="status" className="mt-5 rounded-xl bg-status-error-soft p-3 text-sm leading-6 text-status-error">
                   Correct quantities to between 1 and {MAX_CART_ITEM_QUANTITY} per coffee before continuing.
                 </p>
               )}
 
               {hasUnavailableItem && (
-                <p role="status" className="mt-5 rounded-xl bg-red-50 p-3 text-sm leading-6 text-red-700">
+                <p role="status" className="mt-5 rounded-xl bg-status-error-soft p-3 text-sm leading-6 text-status-error">
                   Remove unavailable drinks before continuing.
                 </p>
               )}
@@ -297,7 +297,7 @@ function CustomerCart({ customerId, accessToken }: CustomerCartProps) {
                 className={`mt-6 flex min-h-12 items-center justify-center rounded-full px-5 text-sm font-semibold ${
                   cannotCheckout
                     ? 'cursor-not-allowed bg-cafe-soft text-cafe-muted'
-                    : 'bg-cafe-espresso text-white hover:bg-cafe-brown'
+                    : 'bg-cafe-primary text-cafe-on-primary hover:bg-cafe-primary-hover'
                 }`}
               >
                 Continue to checkout
@@ -340,7 +340,7 @@ export default function CartPage() {
 
           <Link
             href="/login?next=%2Fcart"
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-espresso px-7 text-sm font-semibold text-white hover:bg-cafe-brown"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-cafe-primary px-7 text-sm font-semibold text-cafe-on-primary hover:bg-cafe-primary-hover"
           >
             Sign in
           </Link>

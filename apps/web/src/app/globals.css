@@ -3,21 +3,110 @@
 :root {
   --background: #ffffff;
   --foreground: #27201b;
+  --cafe-cream: #faf6ef;
+  --cafe-paper: #fffdf9;
+  --cafe-espresso: #352219;
+  --cafe-brown: #54392b;
+  --cafe-accent: #a4521c;
+  --cafe-muted: #736357;
+  --cafe-border: #e4d9cc;
+  --cafe-soft: #f0e7dc;
+  --cafe-primary: #352219;
+  --cafe-primary-hover: #54392b;
+  --cafe-on-primary: #ffffff;
+  --cafe-input-border: #a38b78;
+  --status-error: #b91c1c;
+  --status-error-soft: #fef2f2;
+  --status-error-border: #fecaca;
+  --status-success: #166534;
+  --status-success-soft: #f0fdf4;
+  --status-success-border: #bbf7d0;
+  --status-warning: #713f12;
+  --status-warning-soft: #fffbeb;
+  --status-warning-border: #fcd34d;
   color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --background: #171310;
+  --foreground: #f6eee3;
+  --cafe-cream: #171310;
+  --cafe-paper: #221b16;
+  --cafe-espresso: #f6eee3;
+  --cafe-brown: #ddc4aa;
+  --cafe-accent: #e6ad76;
+  --cafe-muted: #c0ad9b;
+  --cafe-border: #705b49;
+  --cafe-soft: #30261f;
+  --cafe-primary: #e7b387;
+  --cafe-primary-hover: #f2caa7;
+  --cafe-on-primary: #24170f;
+  --cafe-input-border: #96795f;
+  --status-error: #ffb4b4;
+  --status-error-soft: #421e23;
+  --status-error-border: #a95b62;
+  --status-success: #a4dfb4;
+  --status-success-soft: #173524;
+  --status-success-border: #427a54;
+  --status-warning: #f2d194;
+  --status-warning-soft: #392b16;
+  --status-warning-border: #90713e;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --background: #171310;
+    --foreground: #f6eee3;
+    --cafe-cream: #171310;
+    --cafe-paper: #221b16;
+    --cafe-espresso: #f6eee3;
+    --cafe-brown: #ddc4aa;
+    --cafe-accent: #e6ad76;
+    --cafe-muted: #c0ad9b;
+    --cafe-border: #705b49;
+    --cafe-soft: #30261f;
+    --cafe-primary: #e7b387;
+    --cafe-primary-hover: #f2caa7;
+    --cafe-on-primary: #24170f;
+    --cafe-input-border: #96795f;
+    --status-error: #ffb4b4;
+    --status-error-soft: #421e23;
+    --status-error-border: #a95b62;
+    --status-success: #a4dfb4;
+    --status-success-soft: #173524;
+    --status-success-border: #427a54;
+    --status-warning: #f2d194;
+    --status-warning-soft: #392b16;
+    --status-warning-border: #90713e;
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-
-  --color-cafe-cream: #faf6ef;
-  --color-cafe-paper: #fffdf9;
-  --color-cafe-espresso: #352219;
-  --color-cafe-brown: #54392b;
-  --color-cafe-accent: #a4521c;
-  --color-cafe-muted: #736357;
-  --color-cafe-border: #e4d9cc;
-  --color-cafe-soft: #f0e7dc;
+  --color-cafe-cream: var(--cafe-cream);
+  --color-cafe-paper: var(--cafe-paper);
+  --color-cafe-espresso: var(--cafe-espresso);
+  --color-cafe-brown: var(--cafe-brown);
+  --color-cafe-accent: var(--cafe-accent);
+  --color-cafe-muted: var(--cafe-muted);
+  --color-cafe-border: var(--cafe-border);
+  --color-cafe-soft: var(--cafe-soft);
+  --color-cafe-primary: var(--cafe-primary);
+  --color-cafe-primary-hover: var(--cafe-primary-hover);
+  --color-cafe-on-primary: var(--cafe-on-primary);
+  --color-cafe-input-border: var(--cafe-input-border);
+  --color-status-error: var(--status-error);
+  --color-status-error-soft: var(--status-error-soft);
+  --color-status-error-border: var(--status-error-border);
+  --color-status-success: var(--status-success);
+  --color-status-success-soft: var(--status-success-soft);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-soft: var(--status-warning-soft);
+  --color-status-warning-border: var(--status-warning-border);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -31,19 +120,28 @@ body {
 }
 
 ::selection {
-  background: #ead1b7;
-  color: #352219;
+  background: var(--cafe-soft);
+  color: var(--cafe-espresso);
 }
 
 :where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid #a4521c;
+  outline: 2px solid var(--cafe-accent);
   outline-offset: 4px;
+}
+
+:root[data-theme='dark'] .brand-logo {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .brand-logo {
+    filter: invert(1);
+  }
 }
 
 .cafe-menu-toggle {
   list-style: none;
 }
-
 .cafe-menu-toggle::-webkit-details-marker {
   display: none;
 }
